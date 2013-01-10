@@ -11,7 +11,12 @@ import std.string;
 import std.socket;
 
 version(Windows)
-    import std.c.windows.winsock;
+    import std.c.windows.winsock : ntohs, htons, ntohl, htonl;
+else
+version(Posix)
+	import core.sys.posix.netdb  : ntohs, htons, ntohl, htonl;
+else
+	static assert(false, "Unsupported platform");
 
 /// Header (part up to the option fields) of a DHCP packet, as on wire.
 align(1)
