@@ -185,7 +185,7 @@ string ip(uint addr) { return format("%(%d.%)", cast(ubyte[])((&addr)[0..1])); }
 void printPacket(DHCPPacket packet)
 {
 	auto opNames = [1:"BOOTREQUEST",2:"BOOTREPLY"];
-	writefln("op=%s chaddr=%(%02X:%) hops=%d xid=%08X secs=%d flags=%04X\nciaddr=%s yiaddr=%s siaddr=%s giaddr=%s sname=%s file=%s",
+	writefln("  op=%s chaddr=%(%02X:%) hops=%d xid=%08X secs=%d flags=%04X\n  ciaddr=%s yiaddr=%s siaddr=%s giaddr=%s sname=%s file=%s",
 		opNames.get(packet.header.op, text(packet.header.op)),
 		packet.header.chaddr[0..packet.header.hlen],
 		packet.header.hops,
@@ -200,10 +200,11 @@ void printPacket(DHCPPacket packet)
 		to!string(packet.header.file.ptr),
 	);
 
+	writefln("  %d options:", packet.options.length);
 	foreach (option; packet.options)
 	{
 		auto type = cast(DHCPOptionType)option.type;
-		writef("%s: ", type);
+		writef("    %s: ", type);
 		switch (type)
 		{
 			case DHCPOptionType.dhcpMessageType:
@@ -285,7 +286,8 @@ void sendPacket()
 	foreach (ref b; packet.header.chaddr[0..packet.header.hlen])
 		b = uniform!ubyte();
 	packet.options ~= DHCPOption(DHCPOptionType.dhcpMessageType, [DHCPMessageType.discover]);
-	packet.options ~= DHCPOption(DHCPOptionType.dhcpMessageType, [DHCPMessageType.discover]);
+	writefln("Sending packet:");
+	printPacket(packet);
 	socket.sendTo(serializePacket(packet), new InternetAddress("255.255.255.255", SERVER_PORT));
 }
 
@@ -308,6 +310,7 @@ void main()
 
 	(new Thread(&listenThread)).start();
 
+	writeln("Type \"d\" to broadcast a DHCP discover packet.");
 	while (true)
 	{
 		auto line = readln().strip().split();
