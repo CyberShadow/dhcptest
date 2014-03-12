@@ -198,6 +198,7 @@ ubyte[] serializePacket(DHCPPacket packet)
 }
 
 string ip(uint addr) { return format("%(%d.%)", cast(ubyte[])((&addr)[0..1])); }
+string ntime(uint n) { return format("%d (%s)", n.ntohl, n.ntohl.seconds); }
 
 void printPacket(DHCPPacket packet)
 {
@@ -239,17 +240,17 @@ void printPacket(DHCPPacket packet)
 			case DHCPOptionType.domainNameServer:
 			case DHCPOptionType.serverIdentifier:
 				enforce(option.data.length % 4 == 0, "Bad IP option data length");
-				writefln("%(%s, %)", map!ip(cast(uint[])option.data).array());
+				writefln("%-(%s, %)", map!ip(cast(uint[])option.data));
 				break;
 			case DHCPOptionType.domainName:
 				writeln(cast(string)option.data);
 				break;
-			case DHCPOptionType.timeOffset:
-			case DHCPOptionType.leaseTime:
+			case DHCPOptionType.timeOffset:    // seconds
+			case DHCPOptionType.leaseTime:     // seconds
 			case DHCPOptionType.renewalTime:
 			case DHCPOptionType.rebindingTime:
 				enforce(option.data.length % 4 == 0, "Bad integer option data length");
-				writefln("%(%d, %)", map!ntohl(cast(uint[])option.data).array());
+				writefln("%-(%s, %)", map!ntime(cast(uint[])option.data));
 				break;
 			default:
 				writefln("%(%02X %)", option.data);
