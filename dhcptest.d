@@ -199,6 +199,13 @@ ubyte[] serializePacket(DHCPPacket packet)
 
 string ip(uint addr) { return format("%(%d.%)", cast(ubyte[])((&addr)[0..1])); }
 string ntime(uint n) { return format("%d (%s)", n.ntohl, n.ntohl.seconds); }
+string maybeAscii(ubyte[] bytes)
+{
+	string s = format("%(%02X %)", bytes);
+	if (bytes.all!(b => b >= 0x20 && b <= 0x7E))
+		s ~= format(" %(%s%)", [cast(string)bytes]);
+	return s;
+}
 
 void printPacket(DHCPPacket packet)
 {
@@ -253,7 +260,7 @@ void printPacket(DHCPPacket packet)
 				writefln("%-(%s, %)", map!ntime(cast(uint[])option.data));
 				break;
 			default:
-				writefln("%(%02X %)", option.data);
+				writeln(maybeAscii(option.data));
 		}
 	}
 }
