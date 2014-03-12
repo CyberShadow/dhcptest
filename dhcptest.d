@@ -5,6 +5,7 @@ import core.thread;
 import std.algorithm;
 import std.array;
 import std.conv;
+import std.getopt;
 import std.random;
 import std.stdio;
 import std.string;
@@ -296,14 +297,19 @@ void sendPacket()
 	socket.sendTo(serializePacket(packet), new InternetAddress("255.255.255.255", SERVER_PORT));
 }
 
-void main()
+void main(string[] args)
 {
+	string bindAddr = "0.0.0.0";
+	getopt(args,
+		"bind", &bindAddr,
+	);
+
 	socket = new UdpSocket();
 	socket.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
 	try
 	{
 		socket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
-		socket.bind(getAddress("0.0.0.0", CLIENT_PORT)[0]);
+		socket.bind(getAddress(bindAddr, CLIENT_PORT)[0]);
 		writefln("Listening for DHCP replies on port %d.", CLIENT_PORT);
 	}
 	catch (Exception e)
