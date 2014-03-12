@@ -124,6 +124,90 @@ enum DHCPOptionType : ubyte
 	rebindingTime = 59,
 }
 
+string[ubyte] dhcpOptionNames;
+static this()
+{
+	dhcpOptionNames =
+	[
+		  0 : "Pad Option",
+		  1 : "Subnet Mask",
+		  2 : "Time Offset",
+		  3 : "Router Option",
+		  4 : "Time Server Option",
+		  5 : "Name Server Option",
+		  6 : "Domain Name Server Option",
+		  7 : "Log Server Option",
+		  8 : "Cookie Server Option",
+		  9 : "LPR Server Option",
+		 10 : "Impress Server Option",
+		 11 : "Resource Location Server Option",
+		 12 : "Host Name Option",
+		 13 : "Boot File Size Option",
+		 14 : "Merit Dump File",
+		 15 : "Domain Name",
+		 16 : "Swap Server",
+		 17 : "Root Path",
+		 18 : "Extensions Path",
+		 19 : "IP Forwarding Enable/Disable Option",
+		 20 : "Non-Local Source Routing Enable/Disable Option",
+		 21 : "Policy Filter Option",
+		 22 : "Maximum Datagram Reassembly Size",
+		 23 : "Default IP Time-to-live",
+		 24 : "Path MTU Aging Timeout Option",
+		 25 : "Path MTU Plateau Table Option",
+		 26 : "Interface MTU Option",
+		 27 : "All Subnets are Local Option",
+		 28 : "Broadcast Address Option",
+		 29 : "Perform Mask Discovery Option",
+		 30 : "Mask Supplier Option",
+		 31 : "Perform Router Discovery Option",
+		 32 : "Router Solicitation Address Option",
+		 33 : "Static Route Option",
+		 34 : "Trailer Encapsulation Option",
+		 35 : "ARP Cache Timeout Option",
+		 36 : "Ethernet Encapsulation Option",
+		 37 : "TCP Default TTL Option",
+		 38 : "TCP Keepalive Interval Option",
+		 39 : "TCP Keepalive Garbage Option",
+		 40 : "Network Information Service Domain Option",
+		 41 : "Network Information Servers Option",
+		 42 : "Network Time Protocol Servers Option",
+		 43 : "Vendor Specific Information",
+		 44 : "NetBIOS over TCP/IP Name Server Option",
+		 45 : "NetBIOS over TCP/IP Datagram Distribution Server Option",
+		 46 : "NetBIOS over TCP/IP Node Type Option",
+		 47 : "NetBIOS over TCP/IP Scope Option",
+		 48 : "X Window System Font Server Option",
+		 49 : "X Window System Display Manager Option",
+		 50 : "Requested IP Address",
+		 51 : "IP Address Lease Time",
+		 52 : "Option Overload",
+		 53 : "DHCP Message Type",
+		 54 : "Server Identifier",
+		 55 : "Parameter Request List",
+		 56 : "Message",
+		 57 : "Maximum DHCP Message Size",
+		 58 : "Renewal (T1) Time Value",
+		 59 : "Rebinding (T2) Time Value",
+		 60 : "Vendor class identifier",
+		 61 : "Client-identifier",
+		 64 : "Network Information Service+ Domain Option",
+		 65 : "Network Information Service+ Servers Option",
+		 66 : "TFTP server name",
+		 67 : "Bootfile name",
+		 68 : "Mobile IP Home Agent option",
+		 69 : "Simple Mail Transport Protocol (SMTP) Server Option",
+		 70 : "Post Office Protocol (POP3) Server Option",
+		 71 : "Network News Transport Protocol (NNTP) Server Option",
+		 72 : "Default World Wide Web (WWW) Server Option",
+		 73 : "Default Finger Server Option",
+		 74 : "Default Internet Relay Chat (IRC) Server Option",
+		 75 : "StreetTalk Server Option",
+		 76 : "StreetTalk Directory Assistance (STDA) Server Option",
+		255 : "End Option",
+	];
+}
+
 enum DHCPMessageType : ubyte
 {
 	discover = 1,
@@ -229,7 +313,7 @@ void printPacket(DHCPPacket packet)
 	foreach (option; packet.options)
 	{
 		auto type = cast(DHCPOptionType)option.type;
-		writef("    %s: ", type);
+		writef("    %3d (%s): ", type, dhcpOptionNames.get(option.type, "Unknown"));
 		switch (type)
 		{
 			case DHCPOptionType.dhcpMessageType:
