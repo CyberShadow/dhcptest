@@ -1,3 +1,14 @@
+/**
+ * A DHCP testing tool.
+ *
+ * License:
+ *   Boost Software License 1.0:
+ *   http://www.boost.org/LICENSE_1_0.txt
+ *
+ * Authors:
+ *   Vladimir Panteleev <vladimir@thecybershadow.net>
+ */
+
 module dhcptest;
 
 import core.thread;
