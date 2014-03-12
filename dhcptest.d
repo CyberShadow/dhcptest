@@ -388,7 +388,7 @@ void listenThread()
 	}
 }
 
-void sendPacket()
+void sendPacket(ubyte[] mac)
 {
 	DHCPPacket packet;
 	packet.header.op = 1; // BOOTREQUEST
@@ -397,7 +397,8 @@ void sendPacket()
 	packet.header.hops = 0;
 	packet.header.xid = uniform!uint();
 	packet.header.flags = htons(0x8000); // Set BROADCAST flag - required to be able to receive a reply to an imaginary hardware address
-	foreach (ref b; packet.header.chaddr[0..packet.header.hlen])
+	packet.header.chaddr[0..mac.length] = mac;
+	foreach (ref b; packet.header.chaddr[mac.length..packet.header.hlen])
 		b = uniform!ubyte();
 	packet.options ~= DHCPOption(DHCPOptionType.dhcpMessageType, [DHCPMessageType.discover]);
 	writefln("Sending packet:");
@@ -427,15 +428,18 @@ void main(string[] args)
 		writeln("Replies will not be visible. Use a packet capture tool to see replies,\nor try re-running the program with more permissions.");
 	}
 
-	(new Thread(&listenThread)).start();
+	auto t = new Thread(&listenThread);
+	t.isDaemon = true;
+	t.start();
 
-	writeln("Type \"d\" to broadcast a DHCP discover packet.");
-	while (true)
+	writeln(`Type "d" to broadcast a DHCP discover packet, or "help" for details.`);
+	while (!stdin.eof)
 	{
 		auto line = readln().strip().split();
 		if (!line.length)
 		{
-			writeln("Enter a command.");
+			if (!stdin.eof)
+				writeln("Enter a command.");
 			continue;
 		}
 
@@ -443,7 +447,31 @@ void main(string[] args)
 		{
 			case "d":
 			case "discover":
-				sendPacket();
+			{
+				string macStr = line.length > 1 ? line[1] : null;
+				auto mac = macStr.split(":").map!(s => s.parse!ubyte(16)).array();
+				sendPacket(mac);
+				break;
+			}
+
+			case "q":
+			case "quit":
+			case "exit":
+				return;
+
+			case "help":
+			case "?":
+				writeln("Commands:");
+				writeln("  d / discover");
+				writeln("        Broadcasts a DHCP discover packet.");
+				writeln("        You can optionally specify a part or an entire MAC address");
+				writeln("        to use for the client hardware address field (chaddr), e.g.");
+				writeln(`        "d 01:23:45" will use the specified first 3 octets and`);
+				writeln(`        randomly generate the rest.`);
+				writeln(`  help`);
+				writeln(`        Print this message.`);
+				writeln(`  q / quit`);
+				writeln(`        Quits the program.`);
 				break;
 			default:
 				writeln("Unrecognized command.");
