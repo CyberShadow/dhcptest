@@ -122,6 +122,9 @@ enum DHCPOptionType : ubyte
 	serverIdentifier = 54,
 	renewalTime = 58,
 	rebindingTime = 59,
+	vendorClassIdentifier = 60,
+	tftpServerName = 66,
+	bootfileName = 67,
 }
 
 string[ubyte] dhcpOptionNames;
@@ -286,8 +289,8 @@ string ntime(uint n) { return "%d (%s)".format(n.ntohl, n.ntohl.seconds); }
 string maybeAscii(ubyte[] bytes)
 {
 	string s = "%(%02X %)".format(bytes);
-	if (bytes.all!(b => b >= 0x20 && b <= 0x7E))
-		s ~= " %(%s%)".format([cast(string)bytes]);
+	if (bytes.all!(b => (b >= 0x20 && b <= 0x7E) || !b))
+		s = "%(%s, %) (%s)".format((cast(string)bytes).split("\0"), s);
 	return s;
 }
 
@@ -334,10 +337,12 @@ void printPacket(DHCPPacket packet)
 				writefln("%-(%s, %)", map!ip(cast(uint[])option.data));
 				break;
 			case DHCPOptionType.domainName:
+			case DHCPOptionType.tftpServerName:
+			case DHCPOptionType.bootfileName:
 				writeln(cast(string)option.data);
 				break;
-			case DHCPOptionType.timeOffset:    // seconds
-			case DHCPOptionType.leaseTime:     // seconds
+			case DHCPOptionType.timeOffset:
+			case DHCPOptionType.leaseTime:
 			case DHCPOptionType.renewalTime:
 			case DHCPOptionType.rebindingTime:
 				enforce(option.data.length % 4 == 0, "Bad integer option data length");
