@@ -116,8 +116,8 @@ enum DHCPOptionType : ubyte
 	nameServer = 5,
 	domainNameServer = 6,
 	domainName = 15,
-	leaseTime = 51,
 	netbiosNodeType = 46,
+	leaseTime = 51,
 	dhcpMessageType = 53,
 	serverIdentifier = 54,
 	renewalTime = 58,
@@ -197,13 +197,13 @@ ubyte[] serializePacket(DHCPPacket packet)
 	return data;
 }
 
-string ip(uint addr) { return format("%(%d.%)", cast(ubyte[])((&addr)[0..1])); }
-string ntime(uint n) { return format("%d (%s)", n.ntohl, n.ntohl.seconds); }
+string ip(uint addr) { return "%(%d.%)".format(cast(ubyte[])((&addr)[0..1])); }
+string ntime(uint n) { return "%d (%s)".format(n.ntohl, n.ntohl.seconds); }
 string maybeAscii(ubyte[] bytes)
 {
-	string s = format("%(%02X %)", bytes);
+	string s = "%(%02X %)".format(bytes);
 	if (bytes.all!(b => b >= 0x20 && b <= 0x7E))
-		s ~= format(" %(%s%)", [cast(string)bytes]);
+		s ~= " %(%s%)".format([cast(string)bytes]);
 	return s;
 }
 
@@ -290,7 +290,7 @@ void listenThread()
 				writefln("Error while parsing packet [%(%02X %)]: %s", receivedData, e.toString());
 		}
 
-		throw new Exception(format("socket.receiveFrom returned %d.", received));
+		throw new Exception("socket.receiveFrom returned %d.".format(received));
 	}
 	catch (Exception e)
 	{
