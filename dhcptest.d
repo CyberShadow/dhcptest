@@ -408,6 +408,10 @@ void sendPacket(ubyte[] mac)
 
 void main(string[] args)
 {
+	writeln("dhcptest v0.2 - Written by Vladimir Panteleev");
+	writeln("https://github.com/CyberShadow/dhcptest");
+	writeln();
+
 	string bindAddr = "0.0.0.0";
 	bool help;
 	getopt(args,
