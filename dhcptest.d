@@ -409,9 +409,20 @@ void sendPacket(ubyte[] mac)
 void main(string[] args)
 {
 	string bindAddr = "0.0.0.0";
+	bool help;
 	getopt(args,
+		"h|help", &help,
 		"bind", &bindAddr,
 	);
+
+	if (help)
+	{
+		writeln("Usage: ", args[0], " [--bind IP]");
+		writeln();
+		writeln("Options:");
+		writeln("  --bind IP    Listen on the interface with the specified IP.");
+		writeln("               The default is to listen on all interfaces (0.0.0.0).");
+	}
 
 	socket = new UdpSocket();
 	socket.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
