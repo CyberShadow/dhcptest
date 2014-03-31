@@ -413,10 +413,12 @@ void main(string[] args)
 	writeln();
 
 	string bindAddr = "0.0.0.0";
+	string defaultMac;
 	bool help;
 	getopt(args,
 		"h|help", &help,
 		"bind", &bindAddr,
+		"mac", &defaultMac,
 	);
 
 	if (help)
@@ -426,6 +428,8 @@ void main(string[] args)
 		writeln("Options:");
 		writeln("  --bind IP    Listen on the interface with the specified IP.");
 		writeln("               The default is to listen on all interfaces (0.0.0.0).");
+		writeln("  --mac MAC    Specify a MAC address to use for the client hardware");
+		writeln("               address field (chaddr), in the format NN:NN:NN:NN:NN:NN");
 	}
 
 	socket = new UdpSocket();
@@ -463,7 +467,7 @@ void main(string[] args)
 			case "d":
 			case "discover":
 			{
-				string macStr = line.length > 1 ? line[1] : null;
+				string macStr = line.length > 1 ? line[1] : defaultMac;
 				auto mac = macStr.split(":").map!(s => s.parse!ubyte(16)).array();
 				sendPacket(mac);
 				break;
