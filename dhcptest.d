@@ -294,10 +294,10 @@ string maybeAscii(ubyte[] bytes)
 	return s;
 }
 
-void printPacket(DHCPPacket packet)
+void printPacket(File f, DHCPPacket packet)
 {
 	auto opNames = [1:"BOOTREQUEST",2:"BOOTREPLY"];
-	writefln("  op=%s chaddr=%(%02X:%) hops=%d xid=%08X secs=%d flags=%04X\n  ciaddr=%s yiaddr=%s siaddr=%s giaddr=%s sname=%s file=%s",
+	f.writefln("  op=%s chaddr=%(%02X:%) hops=%d xid=%08X secs=%d flags=%04X\n  ciaddr=%s yiaddr=%s siaddr=%s giaddr=%s sname=%s file=%s",
 		opNames.get(packet.header.op, text(packet.header.op)),
 		packet.header.chaddr[0..packet.header.hlen],
 		packet.header.hops,
@@ -312,20 +312,20 @@ void printPacket(DHCPPacket packet)
 		to!string(packet.header.file.ptr),
 	);
 
-	writefln("  %d options:", packet.options.length);
+	f.writefln("  %d options:", packet.options.length);
 	foreach (option; packet.options)
 	{
 		auto type = cast(DHCPOptionType)option.type;
-		writef("    %3d (%s): ", type, dhcpOptionNames.get(option.type, "Unknown"));
+		f.writef("    %3d (%s): ", type, dhcpOptionNames.get(option.type, "Unknown"));
 		switch (type)
 		{
 			case DHCPOptionType.dhcpMessageType:
 				enforce(option.data.length==1, "Bad dhcpMessageType data length");
-				writeln(cast(DHCPMessageType)option.data[0]);
+				f.writeln(cast(DHCPMessageType)option.data[0]);
 				break;
 			case DHCPOptionType.netbiosNodeType:
 				enforce(option.data.length==1, "Bad netbiosNodeType data length");
-				writeln(cast(NETBIOSNodeType)option.data[0]);
+				f.writeln(cast(NETBIOSNodeType)option.data[0]);
 				break;
 			case DHCPOptionType.subnetMask:
 			case DHCPOptionType.router:
@@ -334,24 +334,26 @@ void printPacket(DHCPPacket packet)
 			case DHCPOptionType.domainNameServer:
 			case DHCPOptionType.serverIdentifier:
 				enforce(option.data.length % 4 == 0, "Bad IP option data length");
-				writefln("%-(%s, %)", map!ip(cast(uint[])option.data));
+				f.writefln("%-(%s, %)", map!ip(cast(uint[])option.data));
 				break;
 			case DHCPOptionType.domainName:
 			case DHCPOptionType.tftpServerName:
 			case DHCPOptionType.bootfileName:
-				writeln(cast(string)option.data);
+				f.writeln(cast(string)option.data);
 				break;
 			case DHCPOptionType.timeOffset:
 			case DHCPOptionType.leaseTime:
 			case DHCPOptionType.renewalTime:
 			case DHCPOptionType.rebindingTime:
 				enforce(option.data.length % 4 == 0, "Bad integer option data length");
-				writefln("%-(%s, %)", map!ntime(cast(uint[])option.data));
+				f.writefln("%-(%s, %)", map!ntime(cast(uint[])option.data));
 				break;
 			default:
-				writeln(maybeAscii(option.data));
+				f.writeln(maybeAscii(option.data));
 		}
 	}
+
+	f.flush();
 }
 
 enum SERVER_PORT = 67;
@@ -372,19 +374,19 @@ void listenThread()
 			try
 			{
 				auto packet = parsePacket(receivedData);
-				writefln("Received packet from %s:", address);
-				printPacket(packet);
+				stderr.writefln("Received packet from %s:", address);
+				stdout.printPacket(packet);
 			}
 			catch (Exception e)
-				writefln("Error while parsing packet [%(%02X %)]: %s", receivedData, e.toString());
+				stderr.writefln("Error while parsing packet [%(%02X %)]: %s", receivedData, e.toString());
 		}
 
 		throw new Exception("socket.receiveFrom returned %d.".format(received));
 	}
 	catch (Exception e)
 	{
-		writeln("Error on listening thread:");
-		writeln(e.toString());
+		stderr.writeln("Error on listening thread:");
+		stderr.writeln(e.toString());
 	}
 }
 
@@ -401,16 +403,16 @@ void sendPacket(ubyte[] mac)
 	foreach (ref b; packet.header.chaddr[mac.length..packet.header.hlen])
 		b = uniform!ubyte();
 	packet.options ~= DHCPOption(DHCPOptionType.dhcpMessageType, [DHCPMessageType.discover]);
-	writefln("Sending packet:");
-	printPacket(packet);
+	stderr.writefln("Sending packet:");
+	stderr.printPacket(packet);
 	socket.sendTo(serializePacket(packet), new InternetAddress("255.255.255.255", SERVER_PORT));
 }
 
 void main(string[] args)
 {
-	writeln("dhcptest v0.2 - Written by Vladimir Panteleev");
-	writeln("https://github.com/CyberShadow/dhcptest");
-	writeln();
+	stderr.writeln("dhcptest v0.2 - Written by Vladimir Panteleev");
+	stderr.writeln("https://github.com/CyberShadow/dhcptest");
+	stderr.writeln();
 
 	string bindAddr = "0.0.0.0";
 	string defaultMac;
@@ -423,13 +425,13 @@ void main(string[] args)
 
 	if (help)
 	{
-		writeln("Usage: ", args[0], " [--bind IP]");
-		writeln();
-		writeln("Options:");
-		writeln("  --bind IP    Listen on the interface with the specified IP.");
-		writeln("               The default is to listen on all interfaces (0.0.0.0).");
-		writeln("  --mac MAC    Specify a MAC address to use for the client hardware");
-		writeln("               address field (chaddr), in the format NN:NN:NN:NN:NN:NN");
+		stderr.writeln("Usage: ", args[0], " [--bind IP]");
+		stderr.writeln();
+		stderr.writeln("Options:");
+		stderr.writeln("  --bind IP    Listen on the interface with the specified IP.");
+		stderr.writeln("               The default is to listen on all interfaces (0.0.0.0).");
+		stderr.writeln("  --mac MAC    Specify a MAC address to use for the client hardware");
+		stderr.writeln("               address field (chaddr), in the format NN:NN:NN:NN:NN:NN");
 	}
 
 	socket = new UdpSocket();
@@ -438,27 +440,27 @@ void main(string[] args)
 	{
 		socket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 		socket.bind(getAddress(bindAddr, CLIENT_PORT)[0]);
-		writefln("Listening for DHCP replies on port %d.", CLIENT_PORT);
+		stderr.writefln("Listening for DHCP replies on port %d.", CLIENT_PORT);
 	}
 	catch (Exception e)
 	{
-		writeln("Error while attempting to bind socket:");
-		writeln(e);
-		writeln("Replies will not be visible. Use a packet capture tool to see replies,\nor try re-running the program with more permissions.");
+		stderr.writeln("Error while attempting to bind socket:");
+		stderr.writeln(e);
+		stderr.writeln("Replies will not be visible. Use a packet capture tool to see replies,\nor try re-running the program with more permissions.");
 	}
 
 	auto t = new Thread(&listenThread);
 	t.isDaemon = true;
 	t.start();
 
-	writeln(`Type "d" to broadcast a DHCP discover packet, or "help" for details.`);
+	stderr.writeln(`Type "d" to broadcast a DHCP discover packet, or "help" for details.`);
 	while (!stdin.eof)
 	{
 		auto line = readln().strip().split();
 		if (!line.length)
 		{
 			if (!stdin.eof)
-				writeln("Enter a command.");
+				stderr.writeln("Enter a command.");
 			continue;
 		}
 
@@ -480,20 +482,20 @@ void main(string[] args)
 
 			case "help":
 			case "?":
-				writeln("Commands:");
-				writeln("  d / discover");
-				writeln("        Broadcasts a DHCP discover packet.");
-				writeln("        You can optionally specify a part or an entire MAC address");
-				writeln("        to use for the client hardware address field (chaddr), e.g.");
-				writeln(`        "d 01:23:45" will use the specified first 3 octets and`);
-				writeln(`        randomly generate the rest.`);
-				writeln(`  help`);
-				writeln(`        Print this message.`);
-				writeln(`  q / quit`);
-				writeln(`        Quits the program.`);
+				stderr.writeln("Commands:");
+				stderr.writeln("  d / discover");
+				stderr.writeln("        Broadcasts a DHCP discover packet.");
+				stderr.writeln("        You can optionally specify a part or an entire MAC address");
+				stderr.writeln("        to use for the client hardware address field (chaddr), e.g.");
+				stderr.writeln(`        "d 01:23:45" will use the specified first 3 octets and`);
+				stderr.writeln(`        randomly generate the rest.`);
+				stderr.writeln(`  help`);
+				stderr.writeln(`        Print this message.`);
+				stderr.writeln(`  q / quit`);
+				stderr.writeln(`        Quits the program.`);
 				break;
 			default:
-				writeln("Unrecognized command.");
+				stderr.writeln("Unrecognized command.");
 		}
 	}
 }
