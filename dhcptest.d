@@ -359,6 +359,8 @@ void printPacket(File f, DHCPPacket packet)
 enum SERVER_PORT = 67;
 enum CLIENT_PORT = 68;
 
+bool quiet;
+
 __gshared UdpSocket socket;
 
 void listenThread()
@@ -374,7 +376,7 @@ void listenThread()
 			try
 			{
 				auto packet = parsePacket(receivedData);
-				stderr.writefln("Received packet from %s:", address);
+				if (!quiet) stderr.writefln("Received packet from %s:", address);
 				stdout.printPacket(packet);
 			}
 			catch (Exception e)
@@ -403,17 +405,16 @@ void sendPacket(ubyte[] mac)
 	foreach (ref b; packet.header.chaddr[mac.length..packet.header.hlen])
 		b = uniform!ubyte();
 	packet.options ~= DHCPOption(DHCPOptionType.dhcpMessageType, [DHCPMessageType.discover]);
-	stderr.writefln("Sending packet:");
-	stderr.printPacket(packet);
+	if (!quiet)
+	{
+		stderr.writefln("Sending packet:");
+		stderr.printPacket(packet);
+	}
 	socket.sendTo(serializePacket(packet), new InternetAddress("255.255.255.255", SERVER_PORT));
 }
 
 void main(string[] args)
 {
-	stderr.writeln("dhcptest v0.2 - Written by Vladimir Panteleev");
-	stderr.writeln("https://github.com/CyberShadow/dhcptest");
-	stderr.writeln();
-
 	string bindAddr = "0.0.0.0";
 	string defaultMac;
 	bool help;
@@ -421,7 +422,15 @@ void main(string[] args)
 		"h|help", &help,
 		"bind", &bindAddr,
 		"mac", &defaultMac,
+		"q|quiet", &quiet,
 	);
+
+	if (!quiet)
+	{
+		stderr.writeln("dhcptest v0.2 - Written by Vladimir Panteleev");
+		stderr.writeln("https://github.com/CyberShadow/dhcptest");
+		stderr.writeln();
+	}
 
 	if (help)
 	{
@@ -432,6 +441,8 @@ void main(string[] args)
 		stderr.writeln("               The default is to listen on all interfaces (0.0.0.0).");
 		stderr.writeln("  --mac MAC    Specify a MAC address to use for the client hardware");
 		stderr.writeln("               address field (chaddr), in the format NN:NN:NN:NN:NN:NN");
+		stderr.writeln("  --quiet      Suppress program output except for received data");
+		stderr.writeln("               and error messages");
 	}
 
 	socket = new UdpSocket();
@@ -440,7 +451,7 @@ void main(string[] args)
 	{
 		socket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 		socket.bind(getAddress(bindAddr, CLIENT_PORT)[0]);
-		stderr.writefln("Listening for DHCP replies on port %d.", CLIENT_PORT);
+		if (!quiet) stderr.writefln("Listening for DHCP replies on port %d.", CLIENT_PORT);
 	}
 	catch (Exception e)
 	{
@@ -453,7 +464,7 @@ void main(string[] args)
 	t.isDaemon = true;
 	t.start();
 
-	stderr.writeln(`Type "d" to broadcast a DHCP discover packet, or "help" for details.`);
+	if (!quiet) stderr.writeln(`Type "d" to broadcast a DHCP discover packet, or "help" for details.`);
 	while (!stdin.eof)
 	{
 		auto line = readln().strip().split();
