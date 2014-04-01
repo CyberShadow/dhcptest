@@ -361,38 +361,7 @@ enum CLIENT_PORT = 68;
 
 bool quiet;
 
-__gshared UdpSocket socket;
-
-void listenThread()
-{
-	try
-	{
-		static ubyte[0x10000] buf;
-		ptrdiff_t received;
-		Address address;
-		while ((received = socket.receiveFrom(buf[], address)) > 0)
-		{
-			auto receivedData = buf[0..received].dup;
-			try
-			{
-				auto packet = parsePacket(receivedData);
-				if (!quiet) stderr.writefln("Received packet from %s:", address);
-				stdout.printPacket(packet);
-			}
-			catch (Exception e)
-				stderr.writefln("Error while parsing packet [%(%02X %)]: %s", receivedData, e.toString());
-		}
-
-		throw new Exception("socket.receiveFrom returned %d.".format(received));
-	}
-	catch (Exception e)
-	{
-		stderr.writeln("Error on listening thread:");
-		stderr.writeln(e.toString());
-	}
-}
-
-void sendPacket(ubyte[] mac)
+DHCPPacket generatePacket(ubyte[] mac)
 {
 	DHCPPacket packet;
 	packet.header.op = 1; // BOOTREQUEST
@@ -405,6 +374,11 @@ void sendPacket(ubyte[] mac)
 	foreach (ref b; packet.header.chaddr[mac.length..packet.header.hlen])
 		b = uniform!ubyte();
 	packet.options ~= DHCPOption(DHCPOptionType.dhcpMessageType, [DHCPMessageType.discover]);
+	return packet;
+}
+
+void sendPacket(Socket socket, DHCPPacket packet)
+{
 	if (!quiet)
 	{
 		stderr.writefln("Sending packet:");
@@ -413,16 +387,43 @@ void sendPacket(ubyte[] mac)
 	socket.sendTo(serializePacket(packet), new InternetAddress("255.255.255.255", SERVER_PORT));
 }
 
+void receivePackets(Socket socket, bool delegate(DHCPPacket, Address) handler)
+{
+	static ubyte[0x10000] buf;
+	ptrdiff_t received;
+	Address address;
+	while ((received = socket.receiveFrom(buf[], address)) > 0)
+	{
+		auto receivedData = buf[0..received].dup;
+		try
+		{
+			auto result = handler(parsePacket(receivedData), address);
+			if (!result)
+				return;
+		}
+		catch (Exception e)
+			stderr.writefln("Error while parsing packet [%(%02X %)]: %s", receivedData, e.toString());
+	}
+
+	throw new Exception("socket.receiveFrom returned %d.".format(received));
+}
+
+ubyte[] parseMac(string mac)
+{
+	return mac.split(":").map!(s => s.parse!ubyte(16)).array();
+}
+
 void main(string[] args)
 {
 	string bindAddr = "0.0.0.0";
 	string defaultMac;
-	bool help;
+	bool help, query;
 	getopt(args,
 		"h|help", &help,
 		"bind", &bindAddr,
 		"mac", &defaultMac,
 		"q|quiet", &quiet,
+		"query", &query,
 	);
 
 	if (!quiet)
@@ -443,70 +444,119 @@ void main(string[] args)
 		stderr.writeln("               address field (chaddr), in the format NN:NN:NN:NN:NN:NN");
 		stderr.writeln("  --quiet      Suppress program output except for received data");
 		stderr.writeln("               and error messages");
+		stderr.writeln("  --query      Instead of starting an interactive prompt, immediately send");
+		stderr.writeln("               a discover packet, wait for a result, print it and exit.");
 	}
 
-	socket = new UdpSocket();
+	auto socket = new UdpSocket();
 	socket.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
-	try
+
+	void bindSocket()
 	{
 		socket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 		socket.bind(getAddress(bindAddr, CLIENT_PORT)[0]);
 		if (!quiet) stderr.writefln("Listening for DHCP replies on port %d.", CLIENT_PORT);
 	}
-	catch (Exception e)
-	{
-		stderr.writeln("Error while attempting to bind socket:");
-		stderr.writeln(e);
-		stderr.writeln("Replies will not be visible. Use a packet capture tool to see replies,\nor try re-running the program with more permissions.");
-	}
 
-	auto t = new Thread(&listenThread);
-	t.isDaemon = true;
-	t.start();
-
-	if (!quiet) stderr.writeln(`Type "d" to broadcast a DHCP discover packet, or "help" for details.`);
-	while (!stdin.eof)
+	void runPrompt()
 	{
-		auto line = readln().strip().split();
-		if (!line.length)
+		try
+			bindSocket();
+		catch (Exception e)
 		{
-			if (!stdin.eof)
-				stderr.writeln("Enter a command.");
-			continue;
+			stderr.writeln("Error while attempting to bind socket:");
+			stderr.writeln(e);
+			stderr.writeln("Replies will not be visible. Use a packet capture tool to see replies,");
+			stderr.writeln("or try re-running the program with more permissions.");
 		}
 
-		switch (line[0].toLower())
+		void listenThread()
 		{
-			case "d":
-			case "discover":
+			try
 			{
-				string macStr = line.length > 1 ? line[1] : defaultMac;
-				auto mac = macStr.split(":").map!(s => s.parse!ubyte(16)).array();
-				sendPacket(mac);
-				break;
+				socket.receivePackets((DHCPPacket packet, Address address)
+				{
+					if (!quiet) stderr.writefln("Received packet from %s:", address);
+					stdout.printPacket(packet);
+					return true;
+				});
+			}
+			catch (Exception e)
+			{
+				stderr.writeln("Error on listening thread:");
+				stderr.writeln(e.toString());
+			}
+		}
+
+		auto t = new Thread(&listenThread);
+		t.isDaemon = true;
+		t.start();
+
+		if (!quiet) stderr.writeln(`Type "d" to broadcast a DHCP discover packet, or "help" for details.`);
+		while (!stdin.eof)
+		{
+			auto line = readln().strip().split();
+			if (!line.length)
+			{
+				if (!stdin.eof)
+					stderr.writeln("Enter a command.");
+				continue;
 			}
 
-			case "q":
-			case "quit":
-			case "exit":
-				return;
+			switch (line[0].toLower())
+			{
+				case "d":
+				case "discover":
+				{
+					string mac = line.length > 1 ? line[1] : defaultMac;
+					socket.sendPacket(generatePacket(parseMac(mac)));
+					break;
+				}
 
-			case "help":
-			case "?":
-				stderr.writeln("Commands:");
-				stderr.writeln("  d / discover");
-				stderr.writeln("        Broadcasts a DHCP discover packet.");
-				stderr.writeln("        You can optionally specify a part or an entire MAC address");
-				stderr.writeln("        to use for the client hardware address field (chaddr), e.g.");
-				stderr.writeln(`        "d 01:23:45" will use the specified first 3 octets and`);
-				stderr.writeln(`        randomly generate the rest.`);
-				stderr.writeln(`  help`);
-				stderr.writeln(`        Print this message.`);
-				stderr.writeln(`  q / quit`);
-				stderr.writeln(`        Quits the program.`);
-				break;
-			default:
-				stderr.writeln("Unrecognized command.");
+				case "q":
+				case "quit":
+				case "exit":
+					return;
+
+				case "help":
+				case "?":
+					stderr.writeln("Commands:");
+					stderr.writeln("  d / discover");
+					stderr.writeln("        Broadcasts a DHCP discover packet.");
+					stderr.writeln("        You can optionally specify a part or an entire MAC address");
+					stderr.writeln("        to use for the client hardware address field (chaddr), e.g.");
+					stderr.writeln(`        "d 01:23:45" will use the specified first 3 octets and`);
+					stderr.writeln(`        randomly generate the rest.`);
+					stderr.writeln(`  help`);
+					stderr.writeln(`        Print this message.`);
+					stderr.writeln(`  q / quit`);
+					stderr.writeln(`        Quits the program.`);
+					break;
+				default:
+					stderr.writeln("Unrecognized command.");
+			}
 		}
 	}
+
+	void runQuery()
+	{
+		bindSocket();
+
+		auto sentPacket = generatePacket(parseMac(defaultMac));
+		socket.sendPacket(sentPacket);
+
+		socket.receivePackets((DHCPPacket packet, Address address)
+		{
+			if (packet.header.xid != sentPacket.header.xid)
+				return true;
+			if (!quiet) stderr.writefln("Received packet from %s:", address);
+			stdout.printPacket(packet);
+			return false;
+		});
+	}
+
+	if (query)
+		runQuery();
+	else
+		runPrompt();
 }
