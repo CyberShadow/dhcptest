@@ -16,6 +16,11 @@ You can download a compiled Windows executable from my website, [here](http://fi
 
 ## Changelog
 
+### dhcptest v0.3 (2014-04-??)
+
+ * Add `--mac`, `--quiet`, `--query`, `--print-only` switches
+ * Print program messages to standard error
+
 ### dhcptest v0.2 (2014-03-25)
 
  * License under Boost Software License 1.0
