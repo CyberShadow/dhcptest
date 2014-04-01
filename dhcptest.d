@@ -294,8 +294,23 @@ string maybeAscii(ubyte[] bytes)
 	return s;
 }
 
+__gshared uint printOnly;
+
 void printPacket(File f, DHCPPacket packet)
 {
+	if (printOnly)
+	{
+		foreach (option; packet.options)
+			if (option.type == printOnly)
+			{
+				f.write(cast(char[])option.data);
+				f.flush();
+				return;
+			}
+		if (!quiet) stderr.writefln("(No option %s in packet)", printOnly);
+		return;
+	}
+
 	auto opNames = [1:"BOOTREQUEST",2:"BOOTREPLY"];
 	f.writefln("  op=%s chaddr=%(%02X:%) hops=%d xid=%08X secs=%d flags=%04X\n  ciaddr=%s yiaddr=%s siaddr=%s giaddr=%s sname=%s file=%s",
 		opNames.get(packet.header.op, text(packet.header.op)),
@@ -424,6 +439,8 @@ void main(string[] args)
 		"mac", &defaultMac,
 		"q|quiet", &quiet,
 		"query", &query,
+		"option", &query,
+		"print-only", &printOnly,
 	);
 
 	if (!quiet)
@@ -435,17 +452,19 @@ void main(string[] args)
 
 	if (help)
 	{
-		stderr.writeln("Usage: ", args[0], " [--bind IP]");
+		stderr.writeln("Usage: ", args[0], " [OPTIONS...]");
 		stderr.writeln();
 		stderr.writeln("Options:");
-		stderr.writeln("  --bind IP    Listen on the interface with the specified IP.");
-		stderr.writeln("               The default is to listen on all interfaces (0.0.0.0).");
-		stderr.writeln("  --mac MAC    Specify a MAC address to use for the client hardware");
-		stderr.writeln("               address field (chaddr), in the format NN:NN:NN:NN:NN:NN");
-		stderr.writeln("  --quiet      Suppress program output except for received data");
-		stderr.writeln("               and error messages");
-		stderr.writeln("  --query      Instead of starting an interactive prompt, immediately send");
-		stderr.writeln("               a discover packet, wait for a result, print it and exit.");
+		stderr.writeln("  --bind IP       Listen on the interface with the specified IP.");
+		stderr.writeln("                  The default is to listen on all interfaces (0.0.0.0).");
+		stderr.writeln("  --mac MAC       Specify a MAC address to use for the client hardware");
+		stderr.writeln("                  address field (chaddr), in the format NN:NN:NN:NN:NN:NN");
+		stderr.writeln("  --quiet         Suppress program output except for received data");
+		stderr.writeln("                  and error messages");
+		stderr.writeln("  --query         Instead of starting an interactive prompt, immediately send");
+		stderr.writeln("                  a discover packet, wait for a result, print it and exit.");
+		stderr.writeln("  --print-only N  Print only the specified DHCP option.");
+		stderr.writeln("                  It is assumed to be a text string.");
 	}
 
 	auto socket = new UdpSocket();
