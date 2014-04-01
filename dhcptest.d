@@ -301,7 +301,7 @@ void printPacket(File f, DHCPPacket packet)
 		opNames.get(packet.header.op, text(packet.header.op)),
 		packet.header.chaddr[0..packet.header.hlen],
 		packet.header.hops,
-		packet.header.xid,
+		ntohl(packet.header.xid),
 		ntohs(packet.header.secs),
 		ntohs(packet.header.flags),
 		ip(packet.header.ciaddr),
