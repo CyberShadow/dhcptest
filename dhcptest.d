@@ -465,6 +465,7 @@ void main(string[] args)
 		stderr.writeln("                  a discover packet, wait for a result, print it and exit.");
 		stderr.writeln("  --print-only N  Print only the specified DHCP option.");
 		stderr.writeln("                  It is assumed to be a text string.");
+		return;
 	}
 
 	auto socket = new UdpSocket();
