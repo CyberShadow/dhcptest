@@ -18,7 +18,7 @@ You can download a compiled Windows executable from my website, [here](http://fi
 
 ### dhcptest v0.3 (2014-04-??)
 
- * Add `--mac`, `--quiet`, `--query`, `--print-only` switches
+ * Add switches: `--mac`, `--quiet`, `--query`, `--request`, `--print-only`
  * Print program messages to standard error
 
 ### dhcptest v0.2 (2014-03-25)

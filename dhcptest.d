@@ -121,6 +121,7 @@ enum DHCPOptionType : ubyte
 	leaseTime = 51,
 	dhcpMessageType = 53,
 	serverIdentifier = 54,
+	parameterRequestList = 55,
 	renewalTime = 58,
 	rebindingTime = 59,
 	vendorClassIdentifier = 60,
@@ -294,8 +295,13 @@ string maybeAscii(ubyte[] bytes)
 		s = "%(%s, %) (%s)".format((cast(string)bytes).split("\0"), s);
 	return s;
 }
+string formatDHCPOptionType(DHCPOptionType type)
+{
+	return format("%3d (%s)", cast(ubyte)type, dhcpOptionNames.get(type, "Unknown"));
+}
 
 __gshared uint printOnly;
+__gshared bool quiet;
 
 void printPacket(File f, DHCPPacket packet)
 {
@@ -332,7 +338,7 @@ void printPacket(File f, DHCPPacket packet)
 	foreach (option; packet.options)
 	{
 		auto type = cast(DHCPOptionType)option.type;
-		f.writef("    %3d (%s): ", type, dhcpOptionNames.get(option.type, "Unknown"));
+		f.writef("    %s: ", formatDHCPOptionType(type));
 		switch (type)
 		{
 			case DHCPOptionType.dhcpMessageType:
@@ -365,6 +371,9 @@ void printPacket(File f, DHCPPacket packet)
 				enforce(option.data.length % 4 == 0, "Bad integer option data length");
 				f.writefln("%-(%s, %)", map!ntime(cast(uint[])option.data));
 				break;
+			case DHCPOptionType.parameterRequestList:
+				f.writefln("%-(%s, %)", map!formatDHCPOptionType(cast(DHCPOptionType[])option.data));
+				break;
 			default:
 				f.writeln(maybeAscii(option.data));
 		}
@@ -376,7 +385,7 @@ void printPacket(File f, DHCPPacket packet)
 enum SERVER_PORT = 67;
 enum CLIENT_PORT = 68;
 
-bool quiet;
+ubyte[] requestedOptions;
 
 DHCPPacket generatePacket(ubyte[] mac)
 {
@@ -391,6 +400,8 @@ DHCPPacket generatePacket(ubyte[] mac)
 	foreach (ref b; packet.header.chaddr[mac.length..packet.header.hlen])
 		b = uniform!ubyte();
 	packet.options ~= DHCPOption(DHCPOptionType.dhcpMessageType, [DHCPMessageType.discover]);
+	if (requestedOptions.length)
+		packet.options ~= DHCPOption(DHCPOptionType.parameterRequestList, requestedOptions);
 	return packet;
 }
 
@@ -442,6 +453,7 @@ void main(string[] args)
 		"q|quiet", &quiet,
 		"query", &query,
 		"option", &query,
+		"request", &requestedOptions,
 		"print-only", &printOnly,
 	);
 
@@ -465,6 +477,9 @@ void main(string[] args)
 		stderr.writeln("                  and error messages");
 		stderr.writeln("  --query         Instead of starting an interactive prompt, immediately send");
 		stderr.writeln("                  a discover packet, wait for a result, print it and exit.");
+		stderr.writeln("  --request N     Uses DHCP option 55 (\"Parameter Request List\") to");
+		stderr.writeln("                  explicitly request the specified option from the server.");
+		stderr.writeln("                  Can be repeated several times to request multiple options.");
 		stderr.writeln("  --print-only N  Print only the specified DHCP option.");
 		stderr.writeln("                  It is assumed to be a text string.");
 		return;
