@@ -10,6 +10,22 @@ The tool is written in the [D Programming Language](http://dlang.org/).
 
 You can download a compiled Windows executable from my website, [here](http://files.thecybershadow.net/dhcptest/).
 
+## Usage
+
+By default, dhcptest starts in interactive mode.
+It will listen for DHCP replies, and allow sending DHCP discover packets using the "d" command.
+Type `help` in interactive mode for more information.
+
+The program can also run in automatic mode if the `--query` switch is specified on the command line.
+The program has a number of switches - run `dhcptest --help` to see a list.
+
+An example command line to automatically send a discover packet and explicitly request option 43,
+wait for a reply, then print just that option:
+
+    dhcptest --quiet --query --request 43 --print-only 43
+
+See [RFC 2132](http://tools.ietf.org/html/rfc2132) for a list and description of DHCP options.
+
 ## License
 
 `dhcptest` is available under the [Boost Software License 1.0](http://www.boost.org/LICENSE_1_0.txt).
