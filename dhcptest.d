@@ -459,7 +459,7 @@ void main(string[] args)
 
 	if (!quiet)
 	{
-		stderr.writeln("dhcptest v0.2 - Written by Vladimir Panteleev");
+		stderr.writeln("dhcptest v0.3 - Written by Vladimir Panteleev");
 		stderr.writeln("https://github.com/CyberShadow/dhcptest");
 		stderr.writeln();
 	}

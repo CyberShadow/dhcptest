@@ -16,7 +16,7 @@ You can download a compiled Windows executable from my website, [here](http://fi
 
 ## Changelog
 
-### dhcptest v0.3 (2014-04-??)
+### dhcptest v0.3 (2014-04-05)
 
  * Add switches: `--mac`, `--quiet`, `--query`, `--request`, `--print-only`
  * Print program messages to standard error
