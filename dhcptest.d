@@ -419,7 +419,10 @@ void sendPacket(Socket socket, DHCPPacket packet)
 		stderr.writefln("Sending packet:");
 		stderr.printPacket(packet);
 	}
-	socket.sendTo(serializePacket(packet), new InternetAddress("255.255.255.255", SERVER_PORT));
+	auto data = serializePacket(packet);
+	auto sent = socket.sendTo(data, new InternetAddress("255.255.255.255", SERVER_PORT));
+	enforce(sent > 0, "sendto error");
+	enforce(sent == data.length, "Sent only %d/%d bytes".format(sent, data.length));
 }
 
 bool receivePackets(Socket socket, bool delegate(DHCPPacket, Address) handler, Duration timeout)
