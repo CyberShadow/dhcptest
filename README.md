@@ -26,11 +26,18 @@ wait for a reply, then print just that option:
 
 See [RFC 2132](http://tools.ietf.org/html/rfc2132) for a list and description of DHCP options.
 
+For additional resilience against dropped packets on busy networks,
+consider using the `--retry` and `--timeout` switches.
+
 ## License
 
 `dhcptest` is available under the [Boost Software License 1.0](http://www.boost.org/LICENSE_1_0.txt).
 
 ## Changelog
+
+### dhcptest v0.4 (2014-07-??)
+
+ * Add switches: `--retry`, `--timeout`
 
 ### dhcptest v0.3 (2014-04-05)
 

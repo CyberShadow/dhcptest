@@ -16,6 +16,7 @@ import core.thread;
 import std.algorithm;
 import std.array;
 import std.conv;
+import std.datetime;
 import std.getopt;
 import std.random;
 import std.stdio;
@@ -415,25 +416,46 @@ void sendPacket(Socket socket, DHCPPacket packet)
 	socket.sendTo(serializePacket(packet), new InternetAddress("255.255.255.255", SERVER_PORT));
 }
 
-void receivePackets(Socket socket, bool delegate(DHCPPacket, Address) handler)
+bool receivePackets(Socket socket, bool delegate(DHCPPacket, Address) handler, Duration timeout)
 {
 	static ubyte[0x10000] buf;
-	ptrdiff_t received;
 	Address address;
-	while ((received = socket.receiveFrom(buf[], address)) > 0)
+
+	SysTime start = Clock.currTime();
+	SysTime end = start + timeout;
+	auto set = new SocketSet(1);
+
+	while (true)
 	{
+		auto remaining = end - Clock.currTime();
+		if (remaining <= Duration.zero)
+			break;
+
+		set.reset();
+		set.add(socket);
+		int n = Socket.select(set, null, null, remaining);
+		enforce(n >= 0, "select interrupted");
+		if (!n)
+			break; // timeout exceeded
+
+		auto received = socket.receiveFrom(buf[], address);
+		if (received <= 0)
+			throw new Exception("socket.receiveFrom returned %d.".format(received));
+
 		auto receivedData = buf[0..received].dup;
 		try
 		{
 			auto result = handler(parsePacket(receivedData), address);
 			if (!result)
-				return;
+				return true;
 		}
 		catch (Exception e)
 			stderr.writefln("Error while parsing packet [%(%02X %)]: %s", receivedData, e.toString());
 	}
 
-	throw new Exception("socket.receiveFrom returned %d.".format(received));
+	// timeout exceeded
+	if (!quiet) stderr.writefln("Timed out after %s.", timeout);
+	return false;
 }
 
 ubyte[] parseMac(string mac)
@@ -441,11 +463,14 @@ ubyte[] parseMac(string mac)
 	return mac.split(":").map!(s => s.parse!ubyte(16)).array();
 }
 
-void main(string[] args)
+int main(string[] args)
 {
 	string bindAddr = "0.0.0.0";
 	string defaultMac;
 	bool help, query;
+	float timeoutSeconds = 0f;
+	uint tries = 1;
+
 	getopt(args,
 		"h|help", &help,
 		"bind", &bindAddr,
@@ -454,11 +479,16 @@ void main(string[] args)
 		"query", &query,
 		"request", &requestedOptions,
 		"print-only", &printOnly,
+		"timeout", &timeoutSeconds,
+		"tries", &tries,
 	);
+
+	/// https://issues.dlang.org/show_bug.cgi?id=6725
+	auto timeout = dur!"hnsecs"(cast(long)(convert!("seconds", "hnsecs")(1) * timeoutSeconds));
 
 	if (!quiet)
 	{
-		stderr.writeln("dhcptest v0.3 - Written by Vladimir Panteleev");
+		stderr.writeln("dhcptest v0.4 - Written by Vladimir Panteleev");
 		stderr.writeln("https://github.com/CyberShadow/dhcptest");
 		stderr.writeln();
 	}
@@ -481,7 +511,11 @@ void main(string[] args)
 		stderr.writeln("                  Can be repeated several times to request multiple options.");
 		stderr.writeln("  --print-only N  Print only the specified DHCP option.");
 		stderr.writeln("                  It is assumed to be a text string.");
-		return;
+		stderr.writeln("  --timeout N     Wait N seconds for a reply, after which retry or exit.");
+		stderr.writeln("                  Default is 10 seconds. Can be a fractional number. ");
+		stderr.writeln("  --tries N       Send N DHCP discover packets after each timeout interval.");
+		stderr.writeln("                  Specify N=0 to retry indefinitely.");
+		return 0;
 	}
 
 	auto socket = new UdpSocket();
@@ -515,7 +549,7 @@ void main(string[] args)
 					if (!quiet) stderr.writefln("Received packet from %s:", address);
 					stdout.printPacket(packet);
 					return true;
-				});
+				}, 1000.days);
 			}
 			catch (Exception e)
 			{
@@ -574,25 +608,43 @@ void main(string[] args)
 		}
 	}
 
-	void runQuery()
+	int runQuery()
 	{
+		if (tries == 0)
+			tries = tries.max;
+		if (tries > 1 && timeout == Duration.zero)
+			timeout = 10.seconds;
+
 		bindSocket();
-
 		auto sentPacket = generatePacket(parseMac(defaultMac));
-		socket.sendPacket(sentPacket);
 
-		socket.receivePackets((DHCPPacket packet, Address address)
+		foreach (t; 0..tries)
 		{
-			if (packet.header.xid != sentPacket.header.xid)
-				return true;
-			if (!quiet) stderr.writefln("Received packet from %s:", address);
-			stdout.printPacket(packet);
-			return false;
-		});
+			if (!quiet && t) stderr.writefln("Retrying, try %d...", t+1);
+
+			socket.sendPacket(sentPacket);
+			auto result = socket.receivePackets((DHCPPacket packet, Address address)
+			{
+				if (packet.header.xid != sentPacket.header.xid)
+					return true;
+				if (!quiet) stderr.writefln("Received packet from %s:", address);
+				stdout.printPacket(packet);
+				return false;
+			}, timeout);
+
+			if (result) // Got reply packet?
+				return 0;
+		}
+
+		if (!quiet) stderr.writefln("Giving up after %d tries.", tries);
+		return 1;
 	}
 
 	if (query)
-		runQuery();
+		return runQuery();
 	else
+	{
 		runPrompt();
+		return 0;
+	}
 }
