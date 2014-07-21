@@ -477,6 +477,8 @@ int main(string[] args)
 	float timeoutSeconds = 0f;
 	uint tries = 1;
 
+	enum forever = 1000.days;
+
 	getopt(args,
 		"h|help", &help,
 		"bind", &bindAddr,
@@ -559,7 +561,7 @@ int main(string[] args)
 					if (!quiet) stderr.writefln("Received packet from %s:", address);
 					stdout.printPacket(packet);
 					return true;
-				}, 1000.days);
+				}, forever);
 			}
 			catch (Exception e)
 			{
@@ -622,8 +624,8 @@ int main(string[] args)
 	{
 		if (tries == 0)
 			tries = tries.max;
-		if (tries > 1 && timeout == Duration.zero)
-			timeout = 10.seconds;
+		if (timeout == Duration.zero)
+			timeout = tries == 1 ? forever : 10.seconds;
 
 		bindSocket();
 		auto sentPacket = generatePacket(parseMac(defaultMac));
@@ -646,7 +648,7 @@ int main(string[] args)
 				return 0;
 		}
 
-		if (!quiet) stderr.writefln("Giving up after %d tries.", tries);
+		if (!quiet) stderr.writefln("Giving up after %d %s.", tries, tries==1 ? "try" : "tries");
 		return 1;
 	}
 
