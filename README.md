@@ -16,6 +16,8 @@ By default, dhcptest starts in interactive mode.
 It will listen for DHCP replies, and allow sending DHCP discover packets using the "d" command.
 Type `help` in interactive mode for more information.
 
+If you do not receive any replies, try using the `--bind` option to bind to a specific local interface.
+
 The program can also run in automatic mode if the `--query` switch is specified on the command line.
 The program has a number of switches - run `dhcptest --help` to see a list.
 
