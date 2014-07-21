@@ -42,7 +42,7 @@ consider using the `--retry` and `--timeout` switches.
 
 ## Changelog
 
-### dhcptest v0.4 (2014-07-??)
+### dhcptest v0.4 (2014-07-21)
 
  * Add switches: `--retry`, `--timeout`, `--option`
 
