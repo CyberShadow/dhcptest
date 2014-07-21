@@ -502,6 +502,7 @@ int main(string[] args)
 	{
 		stderr.writeln("dhcptest v0.4 - Written by Vladimir Panteleev");
 		stderr.writeln("https://github.com/CyberShadow/dhcptest");
+		stderr.writeln("Run with --help for a list of command-line options.");
 		stderr.writeln();
 	}
 
