@@ -24,6 +24,11 @@ wait for a reply, then print just that option:
 
     dhcptest --quiet --query --request 43 --print-only 43
 
+You can spoof the Vendor Class Identifier, or send additional DHCP options with the request packet,
+using the `--option` switch:
+
+    dhcptest --query --option "60=Initech Groupware"
+
 See [RFC 2132](http://tools.ietf.org/html/rfc2132) for a list and description of DHCP options.
 
 For additional resilience against dropped packets on busy networks,
@@ -37,7 +42,7 @@ consider using the `--retry` and `--timeout` switches.
 
 ### dhcptest v0.4 (2014-07-??)
 
- * Add switches: `--retry`, `--timeout`
+ * Add switches: `--retry`, `--timeout`, `--option`
 
 ### dhcptest v0.3 (2014-04-05)
 

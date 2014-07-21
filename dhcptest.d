@@ -387,6 +387,7 @@ enum SERVER_PORT = 67;
 enum CLIENT_PORT = 68;
 
 ubyte[] requestedOptions;
+string[] sentOptions;
 
 DHCPPacket generatePacket(ubyte[] mac)
 {
@@ -403,6 +404,11 @@ DHCPPacket generatePacket(ubyte[] mac)
 	packet.options ~= DHCPOption(DHCPOptionType.dhcpMessageType, [DHCPMessageType.discover]);
 	if (requestedOptions.length)
 		packet.options ~= DHCPOption(DHCPOptionType.parameterRequestList, requestedOptions);
+	foreach (option; sentOptions)
+	{
+		auto s = option.findSplit("=");
+		packet.options ~= DHCPOption(cast(DHCPOptionType)to!ubyte(s[0]), cast(ubyte[])s[2]);
+	}
 	return packet;
 }
 
@@ -481,6 +487,7 @@ int main(string[] args)
 		"print-only", &printOnly,
 		"timeout", &timeoutSeconds,
 		"tries", &tries,
+		"option", &sentOptions,
 	);
 
 	/// https://issues.dlang.org/show_bug.cgi?id=6725
@@ -506,6 +513,9 @@ int main(string[] args)
 		stderr.writeln("                  and error messages");
 		stderr.writeln("  --query         Instead of starting an interactive prompt, immediately send");
 		stderr.writeln("                  a discover packet, wait for a result, print it and exit.");
+		stderr.writeln("  --option N=STR  Add a string option with code N and content STR to the");
+		stderr.writeln("                  request packet. E.g. to specify a Vendor Class Identifier:");
+		stderr.writeln("                  --string \"60=Initech Groupware\"");
 		stderr.writeln("  --request N     Uses DHCP option 55 (\"Parameter Request List\") to");
 		stderr.writeln("                  explicitly request the specified option from the server.");
 		stderr.writeln("                  Can be repeated several times to request multiple options.");
