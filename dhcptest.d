@@ -452,7 +452,6 @@ void main(string[] args)
 		"mac", &defaultMac,
 		"q|quiet", &quiet,
 		"query", &query,
-		"option", &query,
 		"request", &requestedOptions,
 		"print-only", &printOnly,
 	);
