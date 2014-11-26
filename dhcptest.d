@@ -508,7 +508,7 @@ int main(string[] args)
 
 	if (help)
 	{
-		stderr.writeln("Usage: ", args[0], " [OPTIONS...]");
+		stderr.writeln("Usage: ", args[0], " [OPTION]...");
 		stderr.writeln();
 		stderr.writeln("Options:");
 		stderr.writeln("  --bind IP       Listen on the interface with the specified IP.");
