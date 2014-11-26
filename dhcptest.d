@@ -24,7 +24,10 @@ import std.string;
 import std.socket;
 
 version(Windows)
-    import std.c.windows.winsock : ntohs, htons, ntohl, htonl;
+	static if (__VERSION__ >= 2067)
+		import core.sys.windows.winsock2 : ntohs, htons, ntohl, htonl;
+	else
+		import std.c.windows.winsock : ntohs, htons, ntohl, htonl;
 else
 version(Posix)
 	import core.sys.posix.netdb  : ntohs, htons, ntohl, htonl;
