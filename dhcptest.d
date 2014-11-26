@@ -542,7 +542,7 @@ int main(string[] args)
 
 	if (!quiet)
 	{
-		stderr.writeln("dhcptest v0.4 - Written by Vladimir Panteleev");
+		stderr.writeln("dhcptest v0.5 - Written by Vladimir Panteleev");
 		stderr.writeln("https://github.com/CyberShadow/dhcptest");
 		stderr.writeln("Run with --help for a list of command-line options.");
 		stderr.writeln();

@@ -42,6 +42,11 @@ consider using the `--retry` and `--timeout` switches.
 
 ## Changelog
 
+### dhcptest v0.5 (2014-11-26)
+
+ * The `--option` switch now understands hexadecimal or IPv4-dotted-quad formatting:  
+   `--option "N[hex]=XX XX XX ..."` or `--option "N[IP]=XXX.XXX.XXX.XXX"`
+
 ### dhcptest v0.4 (2014-07-21)
 
  * Add switches: `--retry`, `--timeout`, `--option`
