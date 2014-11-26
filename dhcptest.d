@@ -19,6 +19,7 @@ import std.conv;
 import std.datetime;
 import std.getopt;
 import std.random;
+import std.range;
 import std.stdio;
 import std.string;
 import std.socket;
@@ -409,8 +410,46 @@ DHCPPacket generatePacket(ubyte[] mac)
 		packet.options ~= DHCPOption(DHCPOptionType.parameterRequestList, requestedOptions);
 	foreach (option; sentOptions)
 	{
+		scope(failure) stderr.writeln("Error with parsing option ", option, ":");
 		auto s = option.findSplit("=");
-		packet.options ~= DHCPOption(cast(DHCPOptionType)to!ubyte(s[0]), cast(ubyte[])s[2]);
+		string num = s[0];
+		string value = s[2];
+		string fmt;
+		if (num.endsWith("]"))
+		{
+			auto numParts = num.findSplit("[");
+			fmt = numParts[2][0..$-1];
+			num = numParts[0];
+		}
+		ubyte[] bytes;
+		switch (fmt)
+		{
+			case "":
+				bytes = cast(ubyte[])value;
+				break;
+			case "hex":
+				static ubyte fromHex(string os) { auto s = os; ubyte b = s.parse!ubyte(16); enforce(!s.length, "Invalid hex string: " ~ os); return b; }
+				bytes = value
+					.replace(" ", "")
+					.replace(":", "")
+					.chunks(2)
+					.map!(chunk => fromHex(to!string(chunk)))
+					.array();
+				break;
+			case "ip":
+			case "IP":
+				bytes = value
+					.replace(" ", ".")
+					.replace(",", ".")
+					.splitter(".")
+					.map!(to!ubyte)
+					.array();
+				enforce(bytes.length % 4 == 0, "Malformed IP address");
+				break;
+			default:
+				throw new Exception("Unknown format: " ~ fmt);
+		}
+		packet.options ~= DHCPOption(cast(DHCPOptionType)to!ubyte(num), bytes);
 	}
 	return packet;
 }
@@ -524,7 +563,9 @@ int main(string[] args)
 		stderr.writeln("                  a discover packet, wait for a result, print it and exit.");
 		stderr.writeln("  --option N=STR  Add a string option with code N and content STR to the");
 		stderr.writeln("                  request packet. E.g. to specify a Vendor Class Identifier:");
-		stderr.writeln("                  --string \"60=Initech Groupware\"");
+		stderr.writeln("                  --option \"60=Initech Groupware\"");
+		stderr.writeln("                  You can specify hexadecimal or IPv4-formatted options using");
+		stderr.writeln("                  --option \"N[hex]=...\" or --option \"N[IP]=...\"");
 		stderr.writeln("  --request N     Uses DHCP option 55 (\"Parameter Request List\") to");
 		stderr.writeln("                  explicitly request the specified option from the server.");
 		stderr.writeln("                  Can be repeated several times to request multiple options.");
