@@ -518,7 +518,7 @@ int main(string[] args)
 {
 	string bindAddr = "0.0.0.0";
 	string defaultMac;
-	bool help, query;
+	bool help, query, queryall;
 	float timeoutSeconds = 0f;
 	uint tries = 1;
 
@@ -530,6 +530,7 @@ int main(string[] args)
 		"mac", &defaultMac,
 		"q|quiet", &quiet,
 		"query", &query,
+		"queryall", &queryall,
 		"request", &requestedOptions,
 		"print-only", &printOnly,
 		"timeout", &timeoutSeconds,
@@ -537,6 +538,8 @@ int main(string[] args)
 		"option", &sentOptions,
 	);
 
+	query = query || queryall;
+	
 	/// https://issues.dlang.org/show_bug.cgi?id=6725
 	auto timeout = dur!"hnsecs"(cast(long)(convert!("seconds", "hnsecs")(1) * timeoutSeconds));
 
@@ -561,6 +564,7 @@ int main(string[] args)
 		stderr.writeln("                  and error messages");
 		stderr.writeln("  --query         Instead of starting an interactive prompt, immediately send");
 		stderr.writeln("                  a discover packet, wait for a result, print it and exit.");
+		stderr.writeln("  --queryall      Same as --query, except all offers returned will be reported.");
 		stderr.writeln("  --option N=STR  Add a string option with code N and content STR to the");
 		stderr.writeln("                  request packet. E.g. to specify a Vendor Class Identifier:");
 		stderr.writeln("                  --option \"60=Initech Groupware\"");
@@ -678,21 +682,40 @@ int main(string[] args)
 		bindSocket();
 		auto sentPacket = generatePacket(parseMac(defaultMac));
 
+		int count = 0;
+		
 		foreach (t; 0..tries)
 		{
 			if (!quiet && t) stderr.writefln("Retrying, try %d...", t+1);
 
-			socket.sendPacket(sentPacket);
-			auto result = socket.receivePackets((DHCPPacket packet, Address address)
-			{
-				if (packet.header.xid != sentPacket.header.xid)
-					return true;
-				if (!quiet) stderr.writefln("Received packet from %s:", address);
-				stdout.printPacket(packet);
-				return false;
-			}, timeout);
+			SysTime start = Clock.currTime();
+			SysTime end = start + timeout;
 
-			if (result) // Got reply packet?
+			socket.sendPacket(sentPacket);
+			
+			while (true)
+			{
+				auto remaining = end - Clock.currTime();
+				if (remaining <= Duration.zero)
+					break;
+
+				auto result = socket.receivePackets((DHCPPacket packet, Address address)
+				{
+					if (packet.header.xid != sentPacket.header.xid)
+						return true;
+					if (!quiet) stderr.writefln("Received packet from %s:", address);
+					stdout.printPacket(packet);
+					return false;
+				}, remaining);
+
+				if (result && !queryall) // Got reply packet and do not wait for all query responses?
+					return 0;
+
+				if (result) // Got reply packet?
+					count++;
+			}
+
+			if (count) // Did we get any responses?
 				return 0;
 		}
 

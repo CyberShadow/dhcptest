@@ -18,7 +18,7 @@ Type `help` in interactive mode for more information.
 
 If you do not receive any replies, try using the `--bind` option to bind to a specific local interface.
 
-The program can also run in automatic mode if the `--query` switch is specified on the command line.
+The program can also run in automatic mode if the `--query` or '--queryall' switch is specified on the command line.
 The program has a number of switches - run `dhcptest --help` to see a list.
 
 An example command line to automatically send a discover packet and explicitly request option 43,
