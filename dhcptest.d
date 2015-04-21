@@ -677,7 +677,7 @@ int main(string[] args)
 		if (tries == 0)
 			tries = tries.max;
 		if (timeout == Duration.zero)
-			timeout = tries == 1 ? forever : 10.seconds;
+			timeout = (tries == 1 && !queryall) ? forever : 10.seconds;
 
 		bindSocket();
 		auto sentPacket = generatePacket(parseMac(defaultMac));
