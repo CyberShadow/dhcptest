@@ -305,23 +305,46 @@ string formatDHCPOptionType(DHCPOptionType type)
 	return format("%3d (%s)", cast(ubyte)type, dhcpOptionNames.get(type, "Unknown"));
 }
 
-__gshared uint printOnly;
+__gshared string printOnly;
 __gshared bool quiet;
 
 void printPacket(File f, DHCPPacket packet)
 {
-	if (printOnly)
+	if (printOnly != "")
 	{
+		ubyte num;
+		string fmt = "";
+		if (printOnly.endsWith("]"))
+		{
+			auto numParts = printOnly.findSplit("[");
+			fmt = numParts[2][0..$-1];
+			num = parse!ubyte(numParts[0]);
+		}
+		else num = parse!ubyte(printOnly);
 		foreach (option; packet.options)
-			if (option.type == printOnly)
+		{
+			if (option.type != num) continue;
+			switch (fmt.toLower())
 			{
-				f.write(cast(char[])option.data);
-				f.flush();
-				return;
+				case "":
+					f.write(cast(char[])option.data);
+					f.flush();
+					return;
+				case "hex":
+					f.writefln("%-(%02X%)", cast(ubyte[])option.data);
+					return;
+				case "ip":
+					f.writefln("%-(%s, %)", map!ip(cast(uint[])option.data));
+					return;
+				default:
+					if (!quiet) stderr.writefln("Unknown format for option %d: %s",num,fmt);
+					return;
 			}
-		if (!quiet) stderr.writefln("(No option %s in packet)", printOnly);
+		}
+		if (!quiet) stderr.writefln("(No option %s in packet)", num);
 		return;
 	}
+
 
 	auto opNames = [1:"BOOTREQUEST",2:"BOOTREPLY"];
 	f.writefln("  op=%s chaddr=%(%02X:%) hops=%d xid=%08X secs=%d flags=%04X\n  ciaddr=%s yiaddr=%s siaddr=%s giaddr=%s sname=%s file=%s",
@@ -576,6 +599,8 @@ int main(string[] args)
 		stderr.writeln("                  Can be repeated several times to request multiple options.");
 		stderr.writeln("  --print-only N  Print only the specified DHCP option.");
 		stderr.writeln("                  It is assumed to be a text string.");
+		stderr.writeln("                  You can specify hexadecimal or IPv4-formatted output using");
+		stderr.writeln("                  --print-only \"N[hex]\" or --print-only \"N[IP]\"");
 		stderr.writeln("  --timeout N     Wait N seconds for a reply, after which retry or exit.");
 		stderr.writeln("                  Default is 10 seconds. Can be a fractional number. ");
 		stderr.writeln("  --tries N       Send N DHCP discover packets after each timeout interval.");
