@@ -305,36 +305,68 @@ string formatDHCPOptionType(DHCPOptionType type)
 	return format("%3d (%s)", cast(ubyte)type, dhcpOptionNames.get(type, "Unknown"));
 }
 
-__gshared uint printOnly;
+__gshared string printOnly;
 __gshared bool quiet;
 
 void printPacket(File f, DHCPPacket packet)
 {
-	auto opNames = [1:"BOOTREQUEST",2:"BOOTREPLY"];
-	if (!printOnly)
+	if (printOnly != "")
 	{
-		f.writefln("  op=%s chaddr=%(%02X:%) hops=%d xid=%08X secs=%d flags=%04X\n  ciaddr=%s yiaddr=%s siaddr=%s giaddr=%s sname=%s file=%s",
-			opNames.get(packet.header.op, text(packet.header.op)),
-			packet.header.chaddr[0..packet.header.hlen],
-			packet.header.hops,
-			ntohl(packet.header.xid),
-			ntohs(packet.header.secs),
-			ntohs(packet.header.flags),
-			ip(packet.header.ciaddr),
-			ip(packet.header.yiaddr),
-			ip(packet.header.siaddr),
-			ip(packet.header.giaddr),
-			to!string(packet.header.sname.ptr),
-			to!string(packet.header.file.ptr),
-		);
-
-		f.writefln("  %d options:", packet.options.length);
+		ubyte num;
+		string fmt = "";
+		if (printOnly.endsWith("]"))
+		{
+			auto numParts = printOnly.findSplit("[");
+			fmt = numParts[2][0..$-1];
+			num = parse!ubyte(numParts[0]);
+		}
+		else num = parse!ubyte(printOnly);
+		foreach (option; packet.options)
+		{
+			if (option.type != num) continue;
+			switch (fmt.toLower())
+			{
+				case "":
+					f.write(cast(char[])option.data);
+					f.flush();
+					return;
+				case "hex":
+					f.writefln("%-(%02X%)", cast(ubyte[])option.data);
+					return;
+				case "ip":
+					f.writefln("%-(%s, %)", map!ip(cast(uint[])option.data));
+					return;
+				default:
+					if (!quiet) stderr.writefln("Unknown format for option %d: %s",num,fmt);
+					return;
+			}
+		}
+		if (!quiet) stderr.writefln("(No option %s in packet)", num);
+		return;
 	}
+
+
+	auto opNames = [1:"BOOTREQUEST",2:"BOOTREPLY"];
+	f.writefln("  op=%s chaddr=%(%02X:%) hops=%d xid=%08X secs=%d flags=%04X\n  ciaddr=%s yiaddr=%s siaddr=%s giaddr=%s sname=%s file=%s",
+		opNames.get(packet.header.op, text(packet.header.op)),
+		packet.header.chaddr[0..packet.header.hlen],
+		packet.header.hops,
+		ntohl(packet.header.xid),
+		ntohs(packet.header.secs),
+		ntohs(packet.header.flags),
+		ip(packet.header.ciaddr),
+		ip(packet.header.yiaddr),
+		ip(packet.header.siaddr),
+		ip(packet.header.giaddr),
+		to!string(packet.header.sname.ptr),
+		to!string(packet.header.file.ptr),
+	);
+
+	f.writefln("  %d options:", packet.options.length);
 	foreach (option; packet.options)
 	{
 		auto type = cast(DHCPOptionType)option.type;
-		if (printOnly && type!=printOnly) continue;
-		if (!printOnly) f.writef("    %s: ", formatDHCPOptionType(type));
+		f.writef("    %s: ", formatDHCPOptionType(type));
 		switch (type)
 		{
 			case DHCPOptionType.dhcpMessageType:
@@ -373,15 +405,7 @@ void printPacket(File f, DHCPPacket packet)
 			default:
 				f.writeln(maybeAscii(option.data));
 		}
-
-		if (printOnly && type==printOnly) {
-			f.flush();
-			return;
-		}
-
 	}
-
-	if (printOnly && !quiet) stderr.writefln("(No option %s in packet)", printOnly);
 
 	f.flush();
 }
@@ -500,7 +524,10 @@ bool receivePackets(Socket socket, bool delegate(DHCPPacket, Address) handler, D
 				return true;
 		}
 		catch (Exception e)
+		{
 			stderr.writefln("Error while parsing packet [%(%02X %)]: %s", receivedData, e.toString());
+			end = Clock.currTime();
+		}
 	}
 
 	// timeout exceeded
@@ -517,7 +544,7 @@ int main(string[] args)
 {
 	string bindAddr = "0.0.0.0";
 	string defaultMac;
-	bool help, query;
+	bool help, query, wait;
 	float timeoutSeconds = 0f;
 	uint tries = 1;
 
@@ -529,6 +556,7 @@ int main(string[] args)
 		"mac", &defaultMac,
 		"q|quiet", &quiet,
 		"query", &query,
+		"wait", &wait,
 		"request", &requestedOptions,
 		"print-only", &printOnly,
 		"timeout", &timeoutSeconds,
@@ -536,6 +564,8 @@ int main(string[] args)
 		"option", &sentOptions,
 	);
 
+	if (wait) enforce(query, "Option --wait only supported with --query");
+	
 	/// https://issues.dlang.org/show_bug.cgi?id=6725
 	auto timeout = dur!"hnsecs"(cast(long)(convert!("seconds", "hnsecs")(1) * timeoutSeconds));
 
@@ -560,6 +590,8 @@ int main(string[] args)
 		stderr.writeln("                  and error messages");
 		stderr.writeln("  --query         Instead of starting an interactive prompt, immediately send");
 		stderr.writeln("                  a discover packet, wait for a result, print it and exit.");
+		stderr.writeln("  --wait          Wait until timeout elapsed before exiting from --query, all");
+		stderr.writeln("                  offers returned will be reported.");
 		stderr.writeln("  --option N=STR  Add a string option with code N and content STR to the");
 		stderr.writeln("                  request packet. E.g. to specify a Vendor Class Identifier:");
 		stderr.writeln("                  --option \"60=Initech Groupware\"");
@@ -672,26 +704,45 @@ int main(string[] args)
 		if (tries == 0)
 			tries = tries.max;
 		if (timeout == Duration.zero)
-			timeout = tries == 1 ? forever : 10.seconds;
+			timeout = (tries == 1 && !wait) ? forever : 10.seconds;
 
 		bindSocket();
 		auto sentPacket = generatePacket(parseMac(defaultMac));
 
+		int count = 0;
+		
 		foreach (t; 0..tries)
 		{
 			if (!quiet && t) stderr.writefln("Retrying, try %d...", t+1);
 
-			socket.sendPacket(sentPacket);
-			auto result = socket.receivePackets((DHCPPacket packet, Address address)
-			{
-				if (packet.header.xid != sentPacket.header.xid)
-					return true;
-				if (!quiet) stderr.writefln("Received packet from %s:", address);
-				stdout.printPacket(packet);
-				return false;
-			}, timeout);
+			SysTime start = Clock.currTime();
+			SysTime end = start + timeout;
 
-			if (result) // Got reply packet?
+			socket.sendPacket(sentPacket);
+			
+			while (true)
+			{
+				auto remaining = end - Clock.currTime();
+				if (remaining <= Duration.zero)
+					break;
+
+				auto result = socket.receivePackets((DHCPPacket packet, Address address)
+				{
+					if (packet.header.xid != sentPacket.header.xid)
+						return true;
+					if (!quiet) stderr.writefln("Received packet from %s:", address);
+					stdout.printPacket(packet);
+					return false;
+				}, remaining);
+
+				if (result && !wait) // Got reply packet and do not wait for all query responses
+					return 0;
+
+				if (result) // Got reply packet?
+					count++;
+			}
+
+			if (count) // Did we get any responses?
 				return 0;
 		}
 
