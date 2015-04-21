@@ -310,40 +310,31 @@ __gshared bool quiet;
 
 void printPacket(File f, DHCPPacket packet)
 {
-	if (printOnly)
-	{
-		foreach (option; packet.options)
-			if (option.type == printOnly)
-			{
-				f.write(cast(char[])option.data);
-				f.flush();
-				return;
-			}
-		if (!quiet) stderr.writefln("(No option %s in packet)", printOnly);
-		return;
-	}
-
 	auto opNames = [1:"BOOTREQUEST",2:"BOOTREPLY"];
-	f.writefln("  op=%s chaddr=%(%02X:%) hops=%d xid=%08X secs=%d flags=%04X\n  ciaddr=%s yiaddr=%s siaddr=%s giaddr=%s sname=%s file=%s",
-		opNames.get(packet.header.op, text(packet.header.op)),
-		packet.header.chaddr[0..packet.header.hlen],
-		packet.header.hops,
-		ntohl(packet.header.xid),
-		ntohs(packet.header.secs),
-		ntohs(packet.header.flags),
-		ip(packet.header.ciaddr),
-		ip(packet.header.yiaddr),
-		ip(packet.header.siaddr),
-		ip(packet.header.giaddr),
-		to!string(packet.header.sname.ptr),
-		to!string(packet.header.file.ptr),
-	);
+	if (!printOnly)
+	{
+		f.writefln("  op=%s chaddr=%(%02X:%) hops=%d xid=%08X secs=%d flags=%04X\n  ciaddr=%s yiaddr=%s siaddr=%s giaddr=%s sname=%s file=%s",
+			opNames.get(packet.header.op, text(packet.header.op)),
+			packet.header.chaddr[0..packet.header.hlen],
+			packet.header.hops,
+			ntohl(packet.header.xid),
+			ntohs(packet.header.secs),
+			ntohs(packet.header.flags),
+			ip(packet.header.ciaddr),
+			ip(packet.header.yiaddr),
+			ip(packet.header.siaddr),
+			ip(packet.header.giaddr),
+			to!string(packet.header.sname.ptr),
+			to!string(packet.header.file.ptr),
+		);
 
-	f.writefln("  %d options:", packet.options.length);
+		f.writefln("  %d options:", packet.options.length);
+	}
 	foreach (option; packet.options)
 	{
 		auto type = cast(DHCPOptionType)option.type;
-		f.writef("    %s: ", formatDHCPOptionType(type));
+		if (printOnly && type!=printOnly) continue;
+		if (!printOnly) f.writef("    %s: ", formatDHCPOptionType(type));
 		switch (type)
 		{
 			case DHCPOptionType.dhcpMessageType:
@@ -382,7 +373,15 @@ void printPacket(File f, DHCPPacket packet)
 			default:
 				f.writeln(maybeAscii(option.data));
 		}
+
+		if (printOnly && type==printOnly) {
+			f.flush();
+			return;
+		}
+
 	}
+
+	if (printOnly && !quiet) stderr.writefln("(No option %s in packet)", printOnly);
 
 	f.flush();
 }
