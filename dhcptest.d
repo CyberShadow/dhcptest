@@ -538,7 +538,7 @@ int main(string[] args)
 		"option", &sentOptions,
 	);
 
-	wait = query && wait;
+	if (wait) enforce(query, "Option --wait only supported with --query");
 	
 	/// https://issues.dlang.org/show_bug.cgi?id=6725
 	auto timeout = dur!"hnsecs"(cast(long)(convert!("seconds", "hnsecs")(1) * timeoutSeconds));
