@@ -26,6 +26,12 @@ wait for a reply, then print just that option:
 
     dhcptest --quiet --query --request 43 --print-only 43
 
+Query mode will report the first reply recieved. To automatically send a discover packet and wait for 
+all replies before the timeout, use --wait. For additional resilience against dropped packets on busy 
+networks, consider using the `--retry` and `--timeout` switches:
+
+    dhcptest --quiet --query --wait --retry 5 --timeout 10
+
 You can spoof the Vendor Class Identifier, or send additional DHCP options with the request packet,
 using the `--option` switch:
 
@@ -33,14 +39,16 @@ using the `--option` switch:
 
 See [RFC 2132](http://tools.ietf.org/html/rfc2132) for a list and description of DHCP options.
 
-For additional resilience against dropped packets on busy networks,
-consider using the `--retry` and `--timeout` switches.
 
 ## License
 
 `dhcptest` is available under the [Boost Software License 1.0](http://www.boost.org/LICENSE_1_0.txt).
 
 ## Changelog
+
+### dhcptest v0.6 (TBD)
+
+ * Add switch: `--wait`
 
 ### dhcptest v0.5 (2014-11-26)
 
