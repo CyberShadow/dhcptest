@@ -518,7 +518,7 @@ int main(string[] args)
 {
 	string bindAddr = "0.0.0.0";
 	string defaultMac;
-	bool help, query, queryall;
+	bool help, query, wait;
 	float timeoutSeconds = 0f;
 	uint tries = 1;
 
@@ -530,7 +530,7 @@ int main(string[] args)
 		"mac", &defaultMac,
 		"q|quiet", &quiet,
 		"query", &query,
-		"queryall", &queryall,
+		"wait", &wait,
 		"request", &requestedOptions,
 		"print-only", &printOnly,
 		"timeout", &timeoutSeconds,
@@ -538,7 +538,7 @@ int main(string[] args)
 		"option", &sentOptions,
 	);
 
-	query = query || queryall;
+	wait = query && wait;
 	
 	/// https://issues.dlang.org/show_bug.cgi?id=6725
 	auto timeout = dur!"hnsecs"(cast(long)(convert!("seconds", "hnsecs")(1) * timeoutSeconds));
@@ -564,7 +564,8 @@ int main(string[] args)
 		stderr.writeln("                  and error messages");
 		stderr.writeln("  --query         Instead of starting an interactive prompt, immediately send");
 		stderr.writeln("                  a discover packet, wait for a result, print it and exit.");
-		stderr.writeln("  --queryall      Same as --query, except all offers returned will be reported.");
+		stderr.writeln("  --wait          Wait until timeout elapsed before exiting from --query, all");
+		stderr.writeln("                  offers returned will be reported.");
 		stderr.writeln("  --option N=STR  Add a string option with code N and content STR to the");
 		stderr.writeln("                  request packet. E.g. to specify a Vendor Class Identifier:");
 		stderr.writeln("                  --option \"60=Initech Groupware\"");
@@ -677,7 +678,7 @@ int main(string[] args)
 		if (tries == 0)
 			tries = tries.max;
 		if (timeout == Duration.zero)
-			timeout = (tries == 1 && !queryall) ? forever : 10.seconds;
+			timeout = (tries == 1 && !wait) ? forever : 10.seconds;
 
 		bindSocket();
 		auto sentPacket = generatePacket(parseMac(defaultMac));
@@ -708,7 +709,7 @@ int main(string[] args)
 					return false;
 				}, remaining);
 
-				if (result && !queryall) // Got reply packet and do not wait for all query responses?
+				if (result && !wait) // Got reply packet and do not wait for all query responses
 					return 0;
 
 				if (result) // Got reply packet?
