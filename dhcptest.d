@@ -602,6 +602,8 @@ int main(string[] args)
 		stderr.writeln("                  Can be repeated several times to request multiple options.");
 		stderr.writeln("  --print-only N  Print only the specified DHCP option.");
 		stderr.writeln("                  It is assumed to be a text string.");
+		stderr.writeln("                  You can specify hexadecimal or IPv4-formatted output using");
+		stderr.writeln("                  --print-only \"N[hex]\" or --print-only \"N[IP]\"");
 		stderr.writeln("  --timeout N     Wait N seconds for a reply, after which retry or exit.");
 		stderr.writeln("                  Default is 10 seconds. Can be a fractional number. ");
 		stderr.writeln("  --tries N       Send N DHCP discover packets after each timeout interval.");
