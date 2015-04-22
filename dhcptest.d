@@ -524,10 +524,7 @@ bool receivePackets(Socket socket, bool delegate(DHCPPacket, Address) handler, D
 				return true;
 		}
 		catch (Exception e)
-		{
 			stderr.writefln("Error while parsing packet [%(%02X %)]: %s", receivedData, e.toString());
-			end = Clock.currTime();
-		}
 	}
 
 	// timeout exceeded
