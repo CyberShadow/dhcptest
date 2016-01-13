@@ -415,6 +415,7 @@ enum CLIENT_PORT = 68;
 
 ubyte[] requestedOptions;
 string[] sentOptions;
+ushort requestSecs = 0;
 
 DHCPPacket generatePacket(ubyte[] mac)
 {
@@ -424,6 +425,7 @@ DHCPPacket generatePacket(ubyte[] mac)
 	packet.header.hlen = 6;
 	packet.header.hops = 0;
 	packet.header.xid = uniform!uint();
+	packet.header.secs = requestSecs;
 	packet.header.flags = htons(0x8000); // Set BROADCAST flag - required to be able to receive a reply to an imaginary hardware address
 	packet.header.chaddr[0..mac.length] = mac;
 	foreach (ref b; packet.header.chaddr[mac.length..packet.header.hlen])
@@ -551,6 +553,7 @@ int main(string[] args)
 		"h|help", &help,
 		"bind", &bindAddr,
 		"mac", &defaultMac,
+		"secs", &requestSecs,
 		"q|quiet", &quiet,
 		"query", &query,
 		"wait", &wait,
@@ -583,6 +586,8 @@ int main(string[] args)
 		stderr.writeln("                  The default is to listen on all interfaces (0.0.0.0).");
 		stderr.writeln("  --mac MAC       Specify a MAC address to use for the client hardware");
 		stderr.writeln("                  address field (chaddr), in the format NN:NN:NN:NN:NN:NN");
+		stderr.writeln("  --secs          Specify the \"Secs\" request field (number of seconds elapsed");
+		stderr.writeln("                  since a client began an attempt to acquire or renew a lease)");
 		stderr.writeln("  --quiet         Suppress program output except for received data");
 		stderr.writeln("                  and error messages");
 		stderr.writeln("  --query         Instead of starting an interactive prompt, immediately send");

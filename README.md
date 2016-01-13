@@ -48,6 +48,7 @@ See [RFC 2132](http://tools.ietf.org/html/rfc2132) for a list and description of
 
 ### dhcptest v0.6 (TBD)
 
+ * Add `--secs` switch
  * Contributed by [Darren White](https://github.com/DarrenWhite99):
      * Add switch: `--wait`
      * The --print-only option now understands output formatting:
