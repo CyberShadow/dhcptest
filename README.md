@@ -50,8 +50,8 @@ See [RFC 2132](http://tools.ietf.org/html/rfc2132) for a list and description of
 
  * Add `--secs` switch
  * Contributed by [Darren White](https://github.com/DarrenWhite99):
-     * Add switch: `--wait`
-     * The --print-only option now understands output formatting:
+     * Add `--wait` switch
+     * The `--print-only` switch now understands output formatting:
        `--print-only "N[hex]"` will output the value as a zero padded hexadecimal string of bytes.
        `--print-only "N[ip]"` will output the value as an IP address.
 
