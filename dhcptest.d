@@ -17,6 +17,7 @@ import std.algorithm;
 import std.array;
 import std.conv;
 import std.datetime;
+import std.exception;
 import std.getopt;
 import std.random;
 import std.range;
