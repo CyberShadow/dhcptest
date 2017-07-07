@@ -1,4 +1,7 @@
+*.o
 *.obj
 *.exe
 *.ilk
 *.pdb
+
+/dhcptest
