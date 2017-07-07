@@ -10,6 +10,14 @@ The tool is written in the [D Programming Language](http://dlang.org/).
 
 You can download a compiled Windows executable from my website, [here](http://files.thecybershadow.net/dhcptest/).
 
+## Building
+
+With [DMD](http://dlang.org/download.html#dmd) (or another D compiler) installed, run:
+
+```
+$ dmd dhcptest.d
+```
+
 ## Usage
 
 By default, dhcptest starts in interactive mode.
