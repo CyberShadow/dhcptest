@@ -123,6 +123,7 @@ enum DHCPOptionType : ubyte
 	domainNameServer = 6,
 	domainName = 15,
 	broadcastServerOption = 28,
+	ntpServers = 42,
 	netbiosNodeType = 46,
 	leaseTime = 51,
 	dhcpMessageType = 53,
@@ -384,6 +385,7 @@ void printPacket(File f, DHCPPacket packet)
 			case DHCPOptionType.nameServer:
 			case DHCPOptionType.domainNameServer:
 			case DHCPOptionType.broadcastServerOption:
+			case DHCPOptionType.ntpServers:
 			case DHCPOptionType.serverIdentifier:
 				enforce(option.data.length % 4 == 0, "Bad IP option data length");
 				f.writefln("%-(%s, %)", map!ip(cast(uint[])option.data));
