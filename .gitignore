@@ -3,5 +3,6 @@
 *.exe
 *.ilk
 *.pdb
+*.res
 
 /dhcptest
