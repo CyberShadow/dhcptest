@@ -540,7 +540,7 @@ ubyte[] parseMac(string mac)
 	return mac.split(":").map!(s => s.parse!ubyte(16)).array();
 }
 
-int main(string[] args)
+int run(string[] args)
 {
 	string bindAddr = "0.0.0.0";
 	string defaultMac;
@@ -631,7 +631,7 @@ int main(string[] args)
 		catch (Exception e)
 		{
 			stderr.writeln("Error while attempting to bind socket:");
-			stderr.writeln(e);
+			stderr.writeln(e.msg);
 			stderr.writeln("Replies will not be visible. Use a packet capture tool to see replies,");
 			stderr.writeln("or try re-running the program with more permissions.");
 		}
@@ -761,5 +761,21 @@ int main(string[] args)
 	{
 		runPrompt();
 		return 0;
+	}
+}
+
+int main(string[] args)
+{
+	debug
+		return run(args);
+	else
+	{
+		try
+			return run(args);
+		catch (Exception e)
+		{
+			stderr.writeln("Fatal error: ", e.msg);
+			return 1;
+		}
 	}
 }

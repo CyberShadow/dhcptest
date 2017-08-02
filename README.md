@@ -62,6 +62,7 @@ See [RFC 2132](http://tools.ietf.org/html/rfc2132) for a list and description of
      * The `--print-only` switch now understands output formatting:
        `--print-only "N[hex]"` will output the value as a zero padded hexadecimal string of bytes.
        `--print-only "N[ip]"` will output the value as an IP address.
+ * Don't print stack trace on errors
 
 ### dhcptest v0.5 (2014-11-26)
 
