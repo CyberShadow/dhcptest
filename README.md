@@ -54,7 +54,7 @@ See [RFC 2132](http://tools.ietf.org/html/rfc2132) for a list and description of
 
 ## Changelog
 
-### dhcptest v0.6 (TBD)
+### dhcptest v0.6 (2017-08-02)
 
  * Add `--secs` switch
  * Contributed by [Darren White](https://github.com/DarrenWhite99):
