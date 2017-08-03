@@ -352,41 +352,56 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 	}
 }
 
+void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
+{
+	final switch (fmt)
+	{
+		case OptionFormat.none:
+		case OptionFormat.hex:
+			f.writefln("%-(%02X%)", bytes);
+			break;
+		case OptionFormat.str:
+			f.write(cast(char[])bytes);
+			f.flush();
+			break;
+		case OptionFormat.ip:
+		case OptionFormat.i32:
+		case OptionFormat.dhcpMessageType:
+		case OptionFormat.dhcpOptionType:
+		case OptionFormat.netbiosNodeType:
+			return printOption(f, bytes, fmt);
+		case OptionFormat.time:
+			return printOption(f, bytes, OptionFormat.i32);
+	}
+}
 
 void printPacket(File f, DHCPPacket packet)
 {
 	if (printOnly != "")
 	{
-		ubyte num;
-		string fmt = "";
-		if (printOnly.endsWith("]"))
+		string numStr = printOnly;
+		string fmtStr = "";
+		if (numStr.endsWith("]"))
 		{
 			auto numParts = printOnly.findSplit("[");
-			fmt = numParts[2][0..$-1];
-			num = parse!ubyte(numParts[0]);
+			fmtStr = numParts[2][0..$-1];
+			numStr = numParts[0];
 		}
-		else num = parse!ubyte(printOnly);
+		auto opt = cast(DHCPOptionType)to!ubyte(numStr);
+
+		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.none;
+		if (fmt == OptionFormat.none)
+			fmt = dhcpOptions.get(opt, DHCPOptionSpec.init).format;
+
 		foreach (option; packet.options)
 		{
-			if (option.type != num) continue;
-			switch (fmt.toLower())
+			if (option.type == opt)
 			{
-				case "":
-					f.write(cast(char[])option.data);
-					f.flush();
-					return;
-				case "hex":
-					f.writefln("%-(%02X%)", cast(ubyte[])option.data);
-					return;
-				case "ip":
-					f.writefln("%-(%s, %)", map!ip(cast(uint[])option.data));
-					return;
-				default:
-					if (!quiet) stderr.writefln("Unknown format for option %d: %s",num,fmt);
-					return;
+				printRawOption(f, option.data, fmt);
+				return;
 			}
 		}
-		if (!quiet) stderr.writefln("(No option %s in packet)", num);
+		if (!quiet) stderr.writefln("(No option %s in packet)", opt);
 		return;
 	}
 
@@ -654,8 +669,8 @@ int run(string[] args)
 		stderr.writeln("                  explicitly request the specified option from the server.");
 		stderr.writeln("                  Can be repeated several times to request multiple options.");
 		stderr.writeln("  --print-only N  Print only the specified DHCP option.");
-		stderr.writeln("                  It is assumed to be a text string.");
-		stderr.writeln("                  You can specify hexadecimal or IPv4-formatted output using");
+		stderr.writeln("                  You can specify a desired format using the syntax N[FORMAT]");
+		stderr.writeln("                  See above for a list of FORMATs. For example:");
 		stderr.writeln("                  --print-only \"N[hex]\" or --print-only \"N[IP]\"");
 		stderr.writeln("  --timeout N     Wait N seconds for a reply, after which retry or exit.");
 		stderr.writeln("                  Default is 10 seconds. Can be a fractional number. ");
