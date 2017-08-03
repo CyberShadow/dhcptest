@@ -332,7 +332,7 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 			break;
 		case OptionFormat.i32:
 			enforce(bytes.length % 4 == 0, "Bad integer bytes length");
-			f.writefln("%-(%s, %)", cast(uint[])bytes);
+			f.writefln("%-(%s, %)", (cast(uint[])bytes).map!ntohl);
 			break;
 		case OptionFormat.time:
 			enforce(bytes.length % 4 == 0, "Bad time bytes length");
@@ -506,7 +506,8 @@ DHCPPacket generatePacket(ubyte[] mac)
 					.splitter(",")
 					.map!strip
 					.map!(to!int)
-					.map!(i => cast(ubyte[])[i])
+					.map!htonl
+					.map!((int i) { int[] a = [i]; ubyte[] b = cast(ubyte[])a; return b; })
 					.join();
 				break;
 			case OptionFormat.dhcpMessageType:
