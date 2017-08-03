@@ -115,109 +115,8 @@ struct DHCPPacket
 
 enum DHCPOptionType : ubyte
 {
-	subnetMask = 1,
-	timeOffset = 2,
-	router = 3,
-	timeServer = 4,
-	nameServer = 5,
-	domainNameServer = 6,
-	domainName = 15,
-	broadcastServerOption = 28,
-	ntpServers = 42,
-	netbiosNodeType = 46,
-	leaseTime = 51,
 	dhcpMessageType = 53,
-	serverIdentifier = 54,
 	parameterRequestList = 55,
-	renewalTime = 58,
-	rebindingTime = 59,
-	vendorClassIdentifier = 60,
-	tftpServerName = 66,
-	bootfileName = 67,
-}
-
-string[ubyte] dhcpOptionNames;
-static this()
-{
-	dhcpOptionNames =
-	[
-		  0 : "Pad Option",
-		  1 : "Subnet Mask",
-		  2 : "Time Offset",
-		  3 : "Router Option",
-		  4 : "Time Server Option",
-		  5 : "Name Server Option",
-		  6 : "Domain Name Server Option",
-		  7 : "Log Server Option",
-		  8 : "Cookie Server Option",
-		  9 : "LPR Server Option",
-		 10 : "Impress Server Option",
-		 11 : "Resource Location Server Option",
-		 12 : "Host Name Option",
-		 13 : "Boot File Size Option",
-		 14 : "Merit Dump File",
-		 15 : "Domain Name",
-		 16 : "Swap Server",
-		 17 : "Root Path",
-		 18 : "Extensions Path",
-		 19 : "IP Forwarding Enable/Disable Option",
-		 20 : "Non-Local Source Routing Enable/Disable Option",
-		 21 : "Policy Filter Option",
-		 22 : "Maximum Datagram Reassembly Size",
-		 23 : "Default IP Time-to-live",
-		 24 : "Path MTU Aging Timeout Option",
-		 25 : "Path MTU Plateau Table Option",
-		 26 : "Interface MTU Option",
-		 27 : "All Subnets are Local Option",
-		 28 : "Broadcast Address Option",
-		 29 : "Perform Mask Discovery Option",
-		 30 : "Mask Supplier Option",
-		 31 : "Perform Router Discovery Option",
-		 32 : "Router Solicitation Address Option",
-		 33 : "Static Route Option",
-		 34 : "Trailer Encapsulation Option",
-		 35 : "ARP Cache Timeout Option",
-		 36 : "Ethernet Encapsulation Option",
-		 37 : "TCP Default TTL Option",
-		 38 : "TCP Keepalive Interval Option",
-		 39 : "TCP Keepalive Garbage Option",
-		 40 : "Network Information Service Domain Option",
-		 41 : "Network Information Servers Option",
-		 42 : "Network Time Protocol Servers Option",
-		 43 : "Vendor Specific Information",
-		 44 : "NetBIOS over TCP/IP Name Server Option",
-		 45 : "NetBIOS over TCP/IP Datagram Distribution Server Option",
-		 46 : "NetBIOS over TCP/IP Node Type Option",
-		 47 : "NetBIOS over TCP/IP Scope Option",
-		 48 : "X Window System Font Server Option",
-		 49 : "X Window System Display Manager Option",
-		 50 : "Requested IP Address",
-		 51 : "IP Address Lease Time",
-		 52 : "Option Overload",
-		 53 : "DHCP Message Type",
-		 54 : "Server Identifier",
-		 55 : "Parameter Request List",
-		 56 : "Message",
-		 57 : "Maximum DHCP Message Size",
-		 58 : "Renewal (T1) Time Value",
-		 59 : "Rebinding (T2) Time Value",
-		 60 : "Vendor class identifier",
-		 61 : "Client-identifier",
-		 64 : "Network Information Service+ Domain Option",
-		 65 : "Network Information Service+ Servers Option",
-		 66 : "TFTP server name",
-		 67 : "Bootfile name",
-		 68 : "Mobile IP Home Agent option",
-		 69 : "Simple Mail Transport Protocol (SMTP) Server Option",
-		 70 : "Post Office Protocol (POP3) Server Option",
-		 71 : "Network News Transport Protocol (NNTP) Server Option",
-		 72 : "Default World Wide Web (WWW) Server Option",
-		 73 : "Default Finger Server Option",
-		 74 : "Default Internet Relay Chat (IRC) Server Option",
-		 75 : "StreetTalk Server Option",
-		 76 : "StreetTalk Directory Assistance (STDA) Server Option",
-		255 : "End Option",
-	];
 }
 
 enum DHCPMessageType : ubyte
@@ -238,6 +137,111 @@ enum NETBIOSNodeType : ubyte
 	pNode,
 	mMode,
 	hNode
+}
+
+/// How option values are displayed and interpreted
+enum OptionFormat
+{
+	none,
+	str,
+	ip,
+	IP = ip, // for backwards compatibility
+	hex,
+	i32,
+	time,
+	dhcpMessageType,
+	dhcpOptionType,
+	netbiosNodeType,
+}
+
+struct DHCPOptionSpec
+{
+	string name;
+	OptionFormat format;
+}
+
+DHCPOptionSpec[ubyte] dhcpOptions;
+static this()
+{
+	dhcpOptions =
+	[
+		  0 : DHCPOptionSpec("Pad Option", OptionFormat.none),
+		  1 : DHCPOptionSpec("Subnet Mask", OptionFormat.ip),
+		  2 : DHCPOptionSpec("Time Offset", OptionFormat.time),
+		  3 : DHCPOptionSpec("Router Option", OptionFormat.ip),
+		  4 : DHCPOptionSpec("Time Server Option", OptionFormat.ip),
+		  5 : DHCPOptionSpec("Name Server Option", OptionFormat.ip),
+		  6 : DHCPOptionSpec("Domain Name Server Option", OptionFormat.ip),
+		  7 : DHCPOptionSpec("Log Server Option", OptionFormat.none),
+		  8 : DHCPOptionSpec("Cookie Server Option", OptionFormat.none),
+		  9 : DHCPOptionSpec("LPR Server Option", OptionFormat.none),
+		 10 : DHCPOptionSpec("Impress Server Option", OptionFormat.none),
+		 11 : DHCPOptionSpec("Resource Location Server Option", OptionFormat.none),
+		 12 : DHCPOptionSpec("Host Name Option", OptionFormat.none),
+		 13 : DHCPOptionSpec("Boot File Size Option", OptionFormat.none),
+		 14 : DHCPOptionSpec("Merit Dump File", OptionFormat.none),
+		 15 : DHCPOptionSpec("Domain Name", OptionFormat.str),
+		 16 : DHCPOptionSpec("Swap Server", OptionFormat.none),
+		 17 : DHCPOptionSpec("Root Path", OptionFormat.none),
+		 18 : DHCPOptionSpec("Extensions Path", OptionFormat.none),
+		 19 : DHCPOptionSpec("IP Forwarding Enable/Disable Option", OptionFormat.none),
+		 20 : DHCPOptionSpec("Non-Local Source Routing Enable/Disable Option", OptionFormat.none),
+		 21 : DHCPOptionSpec("Policy Filter Option", OptionFormat.none),
+		 22 : DHCPOptionSpec("Maximum Datagram Reassembly Size", OptionFormat.none),
+		 23 : DHCPOptionSpec("Default IP Time-to-live", OptionFormat.none),
+		 24 : DHCPOptionSpec("Path MTU Aging Timeout Option", OptionFormat.none),
+		 25 : DHCPOptionSpec("Path MTU Plateau Table Option", OptionFormat.none),
+		 26 : DHCPOptionSpec("Interface MTU Option", OptionFormat.none),
+		 27 : DHCPOptionSpec("All Subnets are Local Option", OptionFormat.none),
+		 28 : DHCPOptionSpec("Broadcast Address Option", OptionFormat.ip),
+		 29 : DHCPOptionSpec("Perform Mask Discovery Option", OptionFormat.none),
+		 30 : DHCPOptionSpec("Mask Supplier Option", OptionFormat.none),
+		 31 : DHCPOptionSpec("Perform Router Discovery Option", OptionFormat.none),
+		 32 : DHCPOptionSpec("Router Solicitation Address Option", OptionFormat.none),
+		 33 : DHCPOptionSpec("Static Route Option", OptionFormat.none),
+		 34 : DHCPOptionSpec("Trailer Encapsulation Option", OptionFormat.none),
+		 35 : DHCPOptionSpec("ARP Cache Timeout Option", OptionFormat.none),
+		 36 : DHCPOptionSpec("Ethernet Encapsulation Option", OptionFormat.none),
+		 37 : DHCPOptionSpec("TCP Default TTL Option", OptionFormat.none),
+		 38 : DHCPOptionSpec("TCP Keepalive Interval Option", OptionFormat.none),
+		 39 : DHCPOptionSpec("TCP Keepalive Garbage Option", OptionFormat.none),
+		 40 : DHCPOptionSpec("Network Information Service Domain Option", OptionFormat.none),
+		 41 : DHCPOptionSpec("Network Information Servers Option", OptionFormat.none),
+		 42 : DHCPOptionSpec("Network Time Protocol Servers Option", OptionFormat.ip),
+		 43 : DHCPOptionSpec("Vendor Specific Information", OptionFormat.none),
+		 44 : DHCPOptionSpec("NetBIOS over TCP/IP Name Server Option", OptionFormat.none),
+		 45 : DHCPOptionSpec("NetBIOS over TCP/IP Datagram Distribution Server Option", OptionFormat.none),
+		 46 : DHCPOptionSpec("NetBIOS over TCP/IP Node Type Option", OptionFormat.netbiosNodeType),
+		 47 : DHCPOptionSpec("NetBIOS over TCP/IP Scope Option", OptionFormat.none),
+		 48 : DHCPOptionSpec("X Window System Font Server Option", OptionFormat.none),
+		 49 : DHCPOptionSpec("X Window System Display Manager Option", OptionFormat.none),
+		 50 : DHCPOptionSpec("Requested IP Address", OptionFormat.none),
+		 51 : DHCPOptionSpec("IP Address Lease Time", OptionFormat.time),
+		 52 : DHCPOptionSpec("Option Overload", OptionFormat.none),
+		 53 : DHCPOptionSpec("DHCP Message Type", OptionFormat.dhcpMessageType),
+		 54 : DHCPOptionSpec("Server Identifier", OptionFormat.ip),
+		 55 : DHCPOptionSpec("Parameter Request List", OptionFormat.dhcpOptionType),
+		 56 : DHCPOptionSpec("Message", OptionFormat.none),
+		 57 : DHCPOptionSpec("Maximum DHCP Message Size", OptionFormat.none),
+		 58 : DHCPOptionSpec("Renewal (T1) Time Value", OptionFormat.time),
+		 59 : DHCPOptionSpec("Rebinding (T2) Time Value", OptionFormat.time),
+		 60 : DHCPOptionSpec("Vendor class identifier", OptionFormat.str),
+		 61 : DHCPOptionSpec("Client-identifier", OptionFormat.none),
+		 64 : DHCPOptionSpec("Network Information Service+ Domain Option", OptionFormat.none),
+		 65 : DHCPOptionSpec("Network Information Service+ Servers Option", OptionFormat.none),
+		 66 : DHCPOptionSpec("TFTP server name", OptionFormat.str),
+		 67 : DHCPOptionSpec("Bootfile name", OptionFormat.str),
+		 68 : DHCPOptionSpec("Mobile IP Home Agent option", OptionFormat.none),
+		 69 : DHCPOptionSpec("Simple Mail Transport Protocol (SMTP) Server Option", OptionFormat.none),
+		 70 : DHCPOptionSpec("Post Office Protocol (POP3) Server Option", OptionFormat.none),
+		 71 : DHCPOptionSpec("Network News Transport Protocol (NNTP) Server Option", OptionFormat.none),
+		 72 : DHCPOptionSpec("Default World Wide Web (WWW) Server Option", OptionFormat.none),
+		 73 : DHCPOptionSpec("Default Finger Server Option", OptionFormat.none),
+		 74 : DHCPOptionSpec("Default Internet Relay Chat (IRC) Server Option", OptionFormat.none),
+		 75 : DHCPOptionSpec("StreetTalk Server Option", OptionFormat.none),
+		 76 : DHCPOptionSpec("StreetTalk Directory Assistance (STDA) Server Option", OptionFormat.none),
+		255 : DHCPOptionSpec("End Option", OptionFormat.none),
+	];
 }
 
 DHCPPacket parsePacket(ubyte[] data)
@@ -304,7 +308,7 @@ string maybeAscii(ubyte[] bytes)
 }
 string formatDHCPOptionType(DHCPOptionType type)
 {
-	return format("%3d (%s)", cast(ubyte)type, dhcpOptionNames.get(type, "Unknown"));
+	return format("%3d (%s)", cast(ubyte)type, dhcpOptions.get(type, DHCPOptionSpec("Unknown")));
 }
 
 __gshared string printOnly;
@@ -368,45 +372,40 @@ void printPacket(File f, DHCPPacket packet)
 	foreach (option; packet.options)
 	{
 		auto type = cast(DHCPOptionType)option.type;
+		auto format = dhcpOptions.get(type, DHCPOptionSpec.init).format;
 		f.writef("    %s: ", formatDHCPOptionType(type));
-		switch (type)
+		final switch (format)
 		{
-			case DHCPOptionType.dhcpMessageType:
-				enforce(option.data.length==1, "Bad dhcpMessageType data length");
-				f.writeln(cast(DHCPMessageType)option.data[0]);
+			case OptionFormat.none:
+			case OptionFormat.hex:
+				f.writeln(maybeAscii(option.data));
 				break;
-			case DHCPOptionType.netbiosNodeType:
-				enforce(option.data.length==1, "Bad netbiosNodeType data length");
-				f.writeln(cast(NETBIOSNodeType)option.data[0]);
+			case OptionFormat.str:
+				f.writeln(cast(string)option.data);
 				break;
-			case DHCPOptionType.subnetMask:
-			case DHCPOptionType.router:
-			case DHCPOptionType.timeServer:
-			case DHCPOptionType.nameServer:
-			case DHCPOptionType.domainNameServer:
-			case DHCPOptionType.broadcastServerOption:
-			case DHCPOptionType.ntpServers:
-			case DHCPOptionType.serverIdentifier:
+			case OptionFormat.ip:
 				enforce(option.data.length % 4 == 0, "Bad IP option data length");
 				f.writefln("%-(%s, %)", map!ip(cast(uint[])option.data));
 				break;
-			case DHCPOptionType.domainName:
-			case DHCPOptionType.tftpServerName:
-			case DHCPOptionType.bootfileName:
-				f.writeln(cast(string)option.data);
-				break;
-			case DHCPOptionType.timeOffset:
-			case DHCPOptionType.leaseTime:
-			case DHCPOptionType.renewalTime:
-			case DHCPOptionType.rebindingTime:
+			case OptionFormat.i32:
 				enforce(option.data.length % 4 == 0, "Bad integer option data length");
+				f.writefln("%-(%s, %)", cast(uint[])option.data);
+				break;
+			case OptionFormat.time:
+				enforce(option.data.length % 4 == 0, "Bad time option data length");
 				f.writefln("%-(%s, %)", map!ntime(cast(uint[])option.data));
 				break;
-			case DHCPOptionType.parameterRequestList:
+			case OptionFormat.dhcpMessageType:
+				enforce(option.data.length==1, "Bad dhcpMessageType data length");
+				f.writeln(cast(DHCPMessageType)option.data[0]);
+				break;
+			case OptionFormat.dhcpOptionType:
 				f.writefln("%-(%s, %)", map!formatDHCPOptionType(cast(DHCPOptionType[])option.data));
 				break;
-			default:
-				f.writeln(maybeAscii(option.data));
+			case OptionFormat.netbiosNodeType:
+				enforce(option.data.length==1, "Bad netbiosNodeType data length");
+				f.writeln(cast(NETBIOSNodeType)option.data[0]);
+				break;
 		}
 	}
 
