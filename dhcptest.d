@@ -299,7 +299,7 @@ ubyte[] serializePacket(DHCPPacket packet)
 
 string ip(uint addr) { return "%(%d.%)".format(cast(ubyte[])((&addr)[0..1])); }
 string ntime(uint n) { return "%d (%s)".format(n.ntohl, n.ntohl.seconds); }
-string maybeAscii(ubyte[] bytes)
+string maybeAscii(in ubyte[] bytes)
 {
 	string s = "%(%02X %)".format(bytes);
 	if (bytes.all!(b => (b >= 0x20 && b <= 0x7E) || !b))
@@ -313,6 +313,44 @@ string formatDHCPOptionType(DHCPOptionType type)
 
 __gshared string printOnly;
 __gshared bool quiet;
+
+void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
+{
+	final switch (fmt)
+	{
+		case OptionFormat.none:
+		case OptionFormat.hex:
+			f.writeln(maybeAscii(bytes));
+			break;
+		case OptionFormat.str:
+			f.writeln(cast(string)bytes);
+			break;
+		case OptionFormat.ip:
+			enforce(bytes.length % 4 == 0, "Bad IP bytes length");
+			f.writefln("%-(%s, %)", map!ip(cast(uint[])bytes));
+			break;
+		case OptionFormat.i32:
+			enforce(bytes.length % 4 == 0, "Bad integer bytes length");
+			f.writefln("%-(%s, %)", cast(uint[])bytes);
+			break;
+		case OptionFormat.time:
+			enforce(bytes.length % 4 == 0, "Bad time bytes length");
+			f.writefln("%-(%s, %)", map!ntime(cast(uint[])bytes));
+			break;
+		case OptionFormat.dhcpMessageType:
+			enforce(bytes.length==1, "Bad dhcpMessageType data length");
+			f.writeln(cast(DHCPMessageType)bytes[0]);
+			break;
+		case OptionFormat.dhcpOptionType:
+			f.writefln("%-(%s, %)", map!formatDHCPOptionType(cast(DHCPOptionType[])bytes));
+			break;
+		case OptionFormat.netbiosNodeType:
+			enforce(bytes.length==1, "Bad netbiosNodeType data length");
+			f.writeln(cast(NETBIOSNodeType)bytes[0]);
+			break;
+	}
+}
+
 
 void printPacket(File f, DHCPPacket packet)
 {
@@ -372,41 +410,9 @@ void printPacket(File f, DHCPPacket packet)
 	foreach (option; packet.options)
 	{
 		auto type = cast(DHCPOptionType)option.type;
-		auto format = dhcpOptions.get(type, DHCPOptionSpec.init).format;
 		f.writef("    %s: ", formatDHCPOptionType(type));
-		final switch (format)
-		{
-			case OptionFormat.none:
-			case OptionFormat.hex:
-				f.writeln(maybeAscii(option.data));
-				break;
-			case OptionFormat.str:
-				f.writeln(cast(string)option.data);
-				break;
-			case OptionFormat.ip:
-				enforce(option.data.length % 4 == 0, "Bad IP option data length");
-				f.writefln("%-(%s, %)", map!ip(cast(uint[])option.data));
-				break;
-			case OptionFormat.i32:
-				enforce(option.data.length % 4 == 0, "Bad integer option data length");
-				f.writefln("%-(%s, %)", cast(uint[])option.data);
-				break;
-			case OptionFormat.time:
-				enforce(option.data.length % 4 == 0, "Bad time option data length");
-				f.writefln("%-(%s, %)", map!ntime(cast(uint[])option.data));
-				break;
-			case OptionFormat.dhcpMessageType:
-				enforce(option.data.length==1, "Bad dhcpMessageType data length");
-				f.writeln(cast(DHCPMessageType)option.data[0]);
-				break;
-			case OptionFormat.dhcpOptionType:
-				f.writefln("%-(%s, %)", map!formatDHCPOptionType(cast(DHCPOptionType[])option.data));
-				break;
-			case OptionFormat.netbiosNodeType:
-				enforce(option.data.length==1, "Bad netbiosNodeType data length");
-				f.writeln(cast(NETBIOSNodeType)option.data[0]);
-				break;
-		}
+		auto format = dhcpOptions.get(type, DHCPOptionSpec.init).format;
+		printOption(f, option.data, format);
 	}
 
 	f.flush();
