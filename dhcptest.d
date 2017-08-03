@@ -463,7 +463,6 @@ DHCPPacket generatePacket(ubyte[] mac)
 	packet.header.chaddr[0..mac.length] = mac;
 	foreach (ref b; packet.header.chaddr[mac.length..packet.header.hlen])
 		b = uniform!ubyte();
-	packet.options ~= DHCPOption(DHCPOptionType.dhcpMessageType, [DHCPMessageType.discover]);
 	if (requestedOptions.length)
 		packet.options ~= DHCPOption(DHCPOptionType.parameterRequestList, requestedOptions);
 	foreach (option; sentOptions)
@@ -546,6 +545,8 @@ DHCPPacket generatePacket(ubyte[] mac)
 		}
 		packet.options ~= DHCPOption(opt, bytes);
 	}
+	if (packet.options.all!(option => option.type != DHCPOptionType.dhcpMessageType))
+		packet.options = DHCPOption(DHCPOptionType.dhcpMessageType, [DHCPMessageType.discover]) ~ packet.options;
 	return packet;
 }
 
