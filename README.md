@@ -27,15 +27,20 @@ Type `help` in interactive mode for more information.
 If you do not receive any replies, try using the `--bind` option to bind to a specific local interface.
 
 The program can also run in automatic mode if the `--query` switch is specified on the command line.
-The program has a number of switches - run `dhcptest --help` to see a list.
 
 An example command line to automatically send a discover packet and explicitly request option 43,
 wait for a reply, then print just that option:
 
     dhcptest --quiet --query --request 43 --print-only 43
 
+Options can also be specified by name:
+
+    dhcptest --quiet --query \
+         --request    "Vendor Specific Information" \
+         --print-only "Vendor Specific Information"
+
 Query mode will report the first reply recieved. To automatically send a discover packet and wait for 
-all replies before the timeout, use --wait. For additional resilience against dropped packets on busy 
+all replies before the timeout, use `--wait`. For additional resilience against dropped packets on busy 
 networks, consider using the `--retry` and `--timeout` switches:
 
     dhcptest --quiet --query --wait --retry 5 --timeout 10
@@ -45,14 +50,34 @@ using the `--option` switch:
 
     dhcptest --query --option "60=Initech Groupware"
 
-See [RFC 2132](http://tools.ietf.org/html/rfc2132) for a list and description of DHCP options.
+Run `dhcptest --help` for further details and additional command-line parameters.
 
+For a list and description of DHCP options, see [RFC 2132](http://tools.ietf.org/html/rfc2132).
 
 ## License
 
 `dhcptest` is available under the [Boost Software License 1.0](http://www.boost.org/LICENSE_1_0.txt).
 
 ## Changelog
+
+### dhcptest v0.7 (2017-08-03)
+
+ * Refactor and improve option value parsing
+ * Allow specifying all supported format types in both --option and
+   --print-only switches
+ * Allow specifying DHCP option types by name as well as by number
+ * Allow overriding the request type option. E.g., you can now send
+   'request' (instead of 'discover') packets using:
+
+        --option "DHCP Message Type=request"
+
+ * Add formatting support for options 42 (Network Time Protocol
+   Servers Option) and 82 (Relay Agent Information)
+ * Change how timeouts are handled:
+   * Always default to some finite timeout (not just when `--tries`
+     and `--wait` are absent), but still allow waiting indefinitely if
+     0 is specified.
+   * Increase default timeout from 10 to 60 seconds.
 
 ### dhcptest v0.6 (2017-08-02)
 
