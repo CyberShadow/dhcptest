@@ -309,7 +309,7 @@ string maybeAscii(in ubyte[] bytes)
 }
 string formatDHCPOptionType(DHCPOptionType type)
 {
-	return format("%3d (%s)", cast(ubyte)type, dhcpOptions.get(type, DHCPOptionSpec("Unknown")));
+	return format("%3d (%s)", cast(ubyte)type, dhcpOptions.get(type, DHCPOptionSpec("Unknown")).name);
 }
 DHCPOptionType parseDHCPOptionType(string type)
 {
