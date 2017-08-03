@@ -311,6 +311,10 @@ string formatDHCPOptionType(DHCPOptionType type)
 {
 	return format("%3d (%s)", cast(ubyte)type, dhcpOptions.get(type, DHCPOptionSpec("Unknown")));
 }
+DHCPOptionType parseDHCPOptionType(string type)
+{
+	return type.isNumeric ? cast(DHCPOptionType)type.to!ubyte : type.to!DHCPOptionType;
+}
 
 __gshared string printOnly;
 __gshared bool quiet;
@@ -387,7 +391,7 @@ void printPacket(File f, DHCPPacket packet)
 			fmtStr = numParts[2][0..$-1];
 			numStr = numParts[0];
 		}
-		auto opt = cast(DHCPOptionType)to!ubyte(numStr);
+		auto opt = parseDHCPOptionType(numStr);
 
 		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.none;
 		if (fmt == OptionFormat.none)
@@ -470,7 +474,7 @@ DHCPPacket generatePacket(ubyte[] mac)
 			fmtStr = numParts[2][0..$-1];
 			numStr = numParts[0];
 		}
-		auto opt = cast(DHCPOptionType)to!ubyte(numStr);
+		auto opt = parseDHCPOptionType(numStr);
 		ubyte[] bytes;
 		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.none;
 		if (fmt == OptionFormat.none)
@@ -522,7 +526,7 @@ DHCPPacket generatePacket(ubyte[] mac)
 				bytes = value
 					.splitter(",")
 					.map!strip
-					.map!(to!DHCPOptionType)
+					.map!parseDHCPOptionType
 					.map!((ubyte i) => [i])
 					.join();
 				break;
