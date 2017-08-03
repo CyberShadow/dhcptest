@@ -313,7 +313,12 @@ string formatDHCPOptionType(DHCPOptionType type)
 }
 DHCPOptionType parseDHCPOptionType(string type)
 {
-	return type.isNumeric ? cast(DHCPOptionType)type.to!ubyte : type.to!DHCPOptionType;
+	if (type.isNumeric)
+		return cast(DHCPOptionType)type.to!ubyte;
+	foreach (opt, spec; dhcpOptions)
+		if (!icmp(spec.name, type))
+			return cast(DHCPOptionType)opt;
+	throw new Exception("Unknown DHCP option type: " ~ type);
 }
 
 __gshared string printOnly;
