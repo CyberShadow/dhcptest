@@ -153,6 +153,7 @@ enum OptionFormat
 	dhcpMessageType,
 	dhcpOptionType,
 	netbiosNodeType,
+	relayAgent, // RFC 3046
 }
 
 struct DHCPOptionSpec
@@ -241,6 +242,7 @@ static this()
 		 74 : DHCPOptionSpec("Default Internet Relay Chat (IRC) Server Option", OptionFormat.none),
 		 75 : DHCPOptionSpec("StreetTalk Server Option", OptionFormat.none),
 		 76 : DHCPOptionSpec("StreetTalk Directory Assistance (STDA) Server Option", OptionFormat.none),
+		 82 : DHCPOptionSpec("Relay Agent Information", OptionFormat.relayAgent),
 		255 : DHCPOptionSpec("End Option", OptionFormat.none),
 	];
 }
@@ -321,6 +323,47 @@ DHCPOptionType parseDHCPOptionType(string type)
 	throw new Exception("Unknown DHCP option type: " ~ type);
 }
 
+struct RelayAgentInformation
+{
+	struct Suboption
+	{
+		enum Type : ubyte
+		{
+			agentCircuitID = 1,
+			agentRemoteID = 2,
+		}
+		Type type;
+		char[] value;
+
+		string toString() const { return format("%s=%s", type, value); }
+	}
+	Suboption[] suboptions;
+	ubyte[] slack;
+
+	this(inout(ubyte)[] bytes) inout
+	{
+		inout(Suboption)[] suboptions;
+		while (bytes.length >= 2)
+		{
+			auto len = bytes[1];
+			if (len < 2 || len > bytes.length)
+				break;
+			suboptions ~= inout Suboption(cast(Suboption.Type)bytes[0], cast(inout(char)[])bytes[2..len]);
+			bytes = bytes[len..$];
+		}
+		this.suboptions = suboptions;
+		this.slack = bytes;
+	}
+
+	string toString() const
+	{
+		string result = format("%(%s, %)", suboptions);
+		if (slack.length)
+			result ~= format(" Slack bytes=%(%02X %)", slack);
+		return result;
+	}
+}
+
 __gshared string printOnly;
 __gshared bool quiet;
 
@@ -358,6 +401,9 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 			enforce(bytes.length==1, "Bad netbiosNodeType data length");
 			f.writeln(cast(NETBIOSNodeType)bytes[0]);
 			break;
+		case OptionFormat.relayAgent:
+			f.writeln((const RelayAgentInformation(bytes)).toString());
+			break;
 	}
 }
 
@@ -367,6 +413,7 @@ void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
 	{
 		case OptionFormat.none:
 		case OptionFormat.hex:
+		case OptionFormat.relayAgent:
 			f.writefln("%-(%02X%)", bytes);
 			break;
 		case OptionFormat.str:
@@ -542,6 +589,8 @@ DHCPPacket generatePacket(ubyte[] mac)
 					.map!((ubyte i) => [i])
 					.join();
 				break;
+			case OptionFormat.relayAgent:
+				throw new Exception(format("Sorry, the format %s is unsupported for parsing. Please specify another format explicitly.", fmt));
 		}
 		packet.options ~= DHCPOption(opt, bytes);
 	}
