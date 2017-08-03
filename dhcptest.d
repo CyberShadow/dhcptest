@@ -664,7 +664,7 @@ int run(string[] args)
 	string bindAddr = "0.0.0.0";
 	string defaultMac;
 	bool help, query, wait;
-	float timeoutSeconds = 0f;
+	float timeoutSeconds = 60f;
 	uint tries = 1;
 
 	enum forever = 1000.days;
@@ -733,7 +733,8 @@ int run(string[] args)
 		stderr.writeln("                  See above for a list of FORMATs. For example:");
 		stderr.writeln("                  --print-only \"N[hex]\" or --print-only \"N[IP]\"");
 		stderr.writeln("  --timeout N     Wait N seconds for a reply, after which retry or exit.");
-		stderr.writeln("                  Default is 10 seconds. Can be a fractional number. ");
+		stderr.writeln("                  Default is 60 seconds. Can be a fractional number.");
+		stderr.writeln("                  A value of 0 causes dhcptest to wait indefinitely.");
 		stderr.writeln("  --tries N       Send N DHCP discover packets after each timeout interval.");
 		stderr.writeln("                  Specify N=0 to retry indefinitely.");
 		return 0;
@@ -834,7 +835,7 @@ int run(string[] args)
 		if (tries == 0)
 			tries = tries.max;
 		if (timeout == Duration.zero)
-			timeout = (tries == 1 && !wait) ? forever : 10.seconds;
+			timeout = forever;
 
 		bindSocket();
 		auto sentPacket = generatePacket(parseMac(defaultMac));
