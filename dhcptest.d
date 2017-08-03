@@ -493,7 +493,7 @@ void printPacket(File f, DHCPPacket packet)
 enum SERVER_PORT = 67;
 enum CLIENT_PORT = 68;
 
-ubyte[] requestedOptions;
+string[] requestedOptions;
 string[] sentOptions;
 ushort requestSecs = 0;
 
@@ -511,7 +511,7 @@ DHCPPacket generatePacket(ubyte[] mac)
 	foreach (ref b; packet.header.chaddr[mac.length..packet.header.hlen])
 		b = uniform!ubyte();
 	if (requestedOptions.length)
-		packet.options ~= DHCPOption(DHCPOptionType.parameterRequestList, requestedOptions);
+		packet.options ~= DHCPOption(DHCPOptionType.parameterRequestList, cast(ubyte[])requestedOptions.map!parseDHCPOptionType.array);
 	foreach (option; sentOptions)
 	{
 		scope(failure) stderr.writeln("Error with parsing option ", option, ":");
