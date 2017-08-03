@@ -24,6 +24,7 @@ import std.range;
 import std.stdio;
 import std.string;
 import std.socket;
+import std.traits;
 
 version(Windows)
 	static if (__VERSION__ >= 2067)
@@ -445,32 +446,28 @@ DHCPPacket generatePacket(ubyte[] mac)
 	{
 		scope(failure) stderr.writeln("Error with parsing option ", option, ":");
 		auto s = option.findSplit("=");
-		string num = s[0];
+		string numStr = s[0];
 		string value = s[2];
-		string fmt;
-		if (num.endsWith("]"))
+		string fmtStr;
+		if (numStr.endsWith("]"))
 		{
-			auto numParts = num.findSplit("[");
-			fmt = numParts[2][0..$-1];
-			num = numParts[0];
+			auto numParts = numStr.findSplit("[");
+			fmtStr = numParts[2][0..$-1];
+			numStr = numParts[0];
 		}
+		auto opt = cast(DHCPOptionType)to!ubyte(numStr);
 		ubyte[] bytes;
-		switch (fmt)
+		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.none;
+		if (fmt == OptionFormat.none)
+			fmt = dhcpOptions.get(opt, DHCPOptionSpec.init).format;
+		final switch (fmt)
 		{
-			case "":
+			case OptionFormat.none:
+				throw new Exception(format("Don't know how to interpret given value for option %d, please specify a format explicitly.", opt));
+			case OptionFormat.str:
 				bytes = cast(ubyte[])value;
 				break;
-			case "hex":
-				static ubyte fromHex(string os) { auto s = os; ubyte b = s.parse!ubyte(16); enforce(!s.length, "Invalid hex string: " ~ os); return b; }
-				bytes = value
-					.replace(" ", "")
-					.replace(":", "")
-					.chunks(2)
-					.map!(chunk => fromHex(to!string(chunk)))
-					.array();
-				break;
-			case "ip":
-			case "IP":
+			case OptionFormat.ip:
 				bytes = value
 					.replace(" ", ".")
 					.replace(",", ".")
@@ -479,10 +476,50 @@ DHCPPacket generatePacket(ubyte[] mac)
 					.array();
 				enforce(bytes.length % 4 == 0, "Malformed IP address");
 				break;
-			default:
-				throw new Exception("Unknown format: " ~ fmt);
+			case OptionFormat.hex:
+				static ubyte fromHex(string os) { auto s = os; ubyte b = s.parse!ubyte(16); enforce(!s.length, "Invalid hex string: " ~ os); return b; }
+				bytes = value
+					.replace(" ", "")
+					.replace(":", "")
+					.chunks(2)
+					.map!(chunk => fromHex(to!string(chunk)))
+					.array();
+				break;
+			case OptionFormat.i32:
+			case OptionFormat.time:
+				bytes = value
+					.splitter(",")
+					.map!strip
+					.map!(to!int)
+					.map!(i => cast(ubyte[])[i])
+					.join();
+				break;
+			case OptionFormat.dhcpMessageType:
+				bytes = value
+					.splitter(",")
+					.map!strip
+					.map!(to!DHCPMessageType)
+					.map!((ubyte i) => [i])
+					.join();
+				break;
+			case OptionFormat.dhcpOptionType:
+				bytes = value
+					.splitter(",")
+					.map!strip
+					.map!(to!DHCPOptionType)
+					.map!((ubyte i) => [i])
+					.join();
+				break;
+			case OptionFormat.netbiosNodeType:
+				bytes = value
+					.splitter(",")
+					.map!strip
+					.map!(to!NETBIOSNodeType)
+					.map!((ubyte i) => [i])
+					.join();
+				break;
 		}
-		packet.options ~= DHCPOption(cast(DHCPOptionType)to!ubyte(num), bytes);
+		packet.options ~= DHCPOption(opt, bytes);
 	}
 	return packet;
 }
@@ -602,11 +639,17 @@ int run(string[] args)
 		stderr.writeln("                  a discover packet, wait for a result, print it and exit.");
 		stderr.writeln("  --wait          Wait until timeout elapsed before exiting from --query, all");
 		stderr.writeln("                  offers returned will be reported.");
-		stderr.writeln("  --option N=STR  Add a string option with code N and content STR to the");
-		stderr.writeln("                  request packet. E.g. to specify a Vendor Class Identifier:");
+		stderr.writeln("  --option OPTION Add an option to the request packet. The option must be");
+		stderr.writeln("                  specified using the syntax CODE=VALUE or CODE[FORMAT]=VALUE,");
+		stderr.writeln("                  where CODE is the numeric option number, FORMAT is how the");
+		stderr.writeln("                  value is to be interpreted and decoded, and VALUE is the");
+		stderr.writeln("                  option value. FORMAT may be omitted for known option CODEs");
+		stderr.writeln("                  E.g. to specify a Vendor Class Identifier:");
 		stderr.writeln("                  --option \"60=Initech Groupware\"");
 		stderr.writeln("                  You can specify hexadecimal or IPv4-formatted options using");
 		stderr.writeln("                  --option \"N[hex]=...\" or --option \"N[IP]=...\"");
+		stderr.writeln("                  Supported FORMAT types:");
+		stderr.writefln("                  %-(%s, %)", EnumMembers!OptionFormat[1..$].only);
 		stderr.writeln("  --request N     Uses DHCP option 55 (\"Parameter Request List\") to");
 		stderr.writeln("                  explicitly request the specified option from the server.");
 		stderr.writeln("                  Can be repeated several times to request multiple options.");
