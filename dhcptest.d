@@ -662,6 +662,7 @@ ubyte[] parseMac(string mac)
 int run(string[] args)
 {
 	string bindAddr = "0.0.0.0";
+	string iface = null;
 	string defaultMac;
 	bool help, query, wait;
 	float timeoutSeconds = 60f;
@@ -672,6 +673,7 @@ int run(string[] args)
 	getopt(args,
 		"h|help", &help,
 		"bind", &bindAddr,
+		"iface", &iface,
 		"mac", &defaultMac,
 		"secs", &requestSecs,
 		"q|quiet", &quiet,
@@ -704,6 +706,8 @@ int run(string[] args)
 		stderr.writeln("Options:");
 		stderr.writeln("  --bind IP       Listen on the interface with the specified IP.");
 		stderr.writeln("                  The default is to listen on all interfaces (0.0.0.0).");
+		stderr.writeln("                  On Linux, you should use --iface instead.");
+		stderr.writeln("  --iface NAME    Bind to the specified network interface name.  Linux only.");
 		stderr.writeln("  --mac MAC       Specify a MAC address to use for the client hardware");
 		stderr.writeln("                  address field (chaddr), in the format NN:NN:NN:NN:NN:NN");
 		stderr.writeln("  --secs          Specify the \"Secs\" request field (number of seconds elapsed");
@@ -745,6 +749,17 @@ int run(string[] args)
 
 	void bindSocket()
 	{
+		version (linux)
+		{
+			if (iface)
+			{
+				enum SO_BINDTODEVICE = cast(SocketOption)25;
+				socket.setOption(SocketOptionLevel.SOCKET, SO_BINDTODEVICE, cast(void[])iface);
+			}
+		}
+		else
+			enforce(iface is null, "--iface is not available on this platform");
+
 		socket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 		socket.bind(getAddress(bindAddr, CLIENT_PORT)[0]);
 		if (!quiet) stderr.writefln("Listening for DHCP replies on port %d.", CLIENT_PORT);
