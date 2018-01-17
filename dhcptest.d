@@ -233,7 +233,7 @@ static this()
 		 65 : DHCPOptionSpec("Network Information Service+ Servers Option", OptionFormat.none),
 		 66 : DHCPOptionSpec("TFTP server name", OptionFormat.str),
 		 67 : DHCPOptionSpec("Bootfile name", OptionFormat.str),
-		 68 : DHCPOptionSpec("Mobile IP Home Agent option", OptionFormat.none),
+		 68 : DHCPOptionSpec("Mobile IP Home Agent option", OptionFormat.ip),
 		 69 : DHCPOptionSpec("Simple Mail Transport Protocol (SMTP) Server Option", OptionFormat.none),
 		 70 : DHCPOptionSpec("Post Office Protocol (POP3) Server Option", OptionFormat.none),
 		 71 : DHCPOptionSpec("Network News Transport Protocol (NNTP) Server Option", OptionFormat.none),
