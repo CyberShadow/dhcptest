@@ -414,7 +414,7 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 			break;
 		case OptionFormat.netbiosNodeType:
 			enforce(bytes.length==1, "Bad netbiosNodeType data length");
-			f.writefln("%-(%s, %s)", bytes
+			f.writefln("%-(%s, %)", bytes
 				.map!(b =>
 					NETBIOSNodeTypeChars
 					.length
