@@ -374,61 +374,65 @@ __gshared bool quiet;
 
 void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 {
-	final switch (fmt)
-	{
-		case OptionFormat.none:
-		case OptionFormat.hex:
-			f.writeln(maybeAscii(bytes));
-			break;
-		case OptionFormat.str:
-			f.writeln(cast(string)bytes);
-			break;
-		case OptionFormat.ip:
-			enforce(bytes.length % 4 == 0, "Bad IP bytes length");
-			f.writefln("%-(%s, %)", map!ip(cast(uint[])bytes));
-			break;
-		case OptionFormat.boolean:
-			f.writefln("%-(%s, %)", cast(bool[])bytes);
-			break;
-		case OptionFormat.u8:
-			f.writefln("%-(%s, %)", bytes);
-			break;
-		case OptionFormat.u16:
-			enforce(bytes.length % 2 == 0, "Bad u16 bytes length");
-			f.writefln("%-(%s, %)", (cast(ushort[])bytes).map!ntohs);
-			break;
-		case OptionFormat.u32:
-			enforce(bytes.length % 4 == 0, "Bad u32 bytes length");
-			f.writefln("%-(%s, %)", (cast(uint[])bytes).map!ntohl);
-			break;
-		case OptionFormat.time:
-			enforce(bytes.length % 4 == 0, "Bad time bytes length");
-			f.writefln("%-(%s, %)", map!ntime(cast(uint[])bytes));
-			break;
-		case OptionFormat.dhcpMessageType:
-			enforce(bytes.length==1, "Bad dhcpMessageType data length");
-			f.writeln(cast(DHCPMessageType)bytes[0]);
-			break;
-		case OptionFormat.dhcpOptionType:
-			f.writefln("%-(%s, %)", map!formatDHCPOptionType(cast(DHCPOptionType[])bytes));
-			break;
-		case OptionFormat.netbiosNodeType:
-			enforce(bytes.length==1, "Bad netbiosNodeType data length");
-			f.writefln("%-(%s, %)", bytes
-				.map!(b =>
-					NETBIOSNodeTypeChars
-					.length
-					.iota
-					.filter!(i => (1 << i) & b)
-					.map!(i => NETBIOSNodeTypeChars[i])
-					.array
-				)
-			);
-			break;
-		case OptionFormat.relayAgent:
-			f.writeln((const RelayAgentInformation(bytes)).toString());
-			break;
-	}
+	try
+		final switch (fmt)
+		{
+			case OptionFormat.none:
+			case OptionFormat.hex:
+				f.writeln(maybeAscii(bytes));
+				break;
+			case OptionFormat.str:
+				f.writeln(cast(string)bytes);
+				break;
+			case OptionFormat.ip:
+				enforce(bytes.length % 4 == 0, "Bad IP bytes length");
+				f.writefln("%-(%s, %)", map!ip(cast(uint[])bytes));
+				break;
+			case OptionFormat.boolean:
+				f.writefln("%-(%s, %)", cast(bool[])bytes);
+				break;
+			case OptionFormat.u8:
+				f.writefln("%-(%s, %)", bytes);
+				break;
+			case OptionFormat.u16:
+				enforce(bytes.length % 2 == 0, "Bad u16 bytes length");
+				f.writefln("%-(%s, %)", (cast(ushort[])bytes).map!ntohs);
+				break;
+			case OptionFormat.u32:
+				enforce(bytes.length % 4 == 0, "Bad u32 bytes length");
+				f.writefln("%-(%s, %)", (cast(uint[])bytes).map!ntohl);
+				break;
+			case OptionFormat.time:
+				enforce(bytes.length % 4 == 0, "Bad time bytes length");
+				f.writefln("%-(%s, %)", map!ntime(cast(uint[])bytes));
+				break;
+			case OptionFormat.dhcpMessageType:
+				enforce(bytes.length==1, "Bad dhcpMessageType data length");
+				f.writeln(cast(DHCPMessageType)bytes[0]);
+				break;
+			case OptionFormat.dhcpOptionType:
+				f.writefln("%-(%s, %)", map!formatDHCPOptionType(cast(DHCPOptionType[])bytes));
+				break;
+			case OptionFormat.netbiosNodeType:
+				enforce(bytes.length==1, "Bad netbiosNodeType data length");
+				f.writefln("%-(%s, %)", bytes
+					.map!(b =>
+						NETBIOSNodeTypeChars
+						.length
+						.iota
+						.filter!(i => (1 << i) & b)
+						.map!(i => NETBIOSNodeTypeChars[i])
+						.array
+					)
+				);
+				break;
+			case OptionFormat.relayAgent:
+				f.writeln((const RelayAgentInformation(bytes)).toString());
+				break;
+		}
+	catch (Exception e)
+		f.writefln("Decode error(%s). Raw bytes: %s",
+			e.msg, maybeAscii(bytes));
 }
 
 void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
