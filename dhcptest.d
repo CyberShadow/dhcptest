@@ -159,6 +159,7 @@ enum OptionFormat
 	dhcpOptionType,
 	netbiosNodeType,
 	relayAgent, // RFC 3046
+	vendorSpecificInformation,
 }
 
 struct DHCPOptionSpec
@@ -215,7 +216,7 @@ static this()
 		 40 : DHCPOptionSpec("Network Information Service Domain Option", OptionFormat.str),
 		 41 : DHCPOptionSpec("Network Information Servers Option", OptionFormat.ip),
 		 42 : DHCPOptionSpec("Network Time Protocol Servers Option", OptionFormat.ip),
-		 43 : DHCPOptionSpec("Vendor Specific Information", OptionFormat.none),
+		 43 : DHCPOptionSpec("Vendor Specific Information", OptionFormat.vendorSpecificInformation),
 		 44 : DHCPOptionSpec("NetBIOS over TCP/IP Name Server Option", OptionFormat.ip),
 		 45 : DHCPOptionSpec("NetBIOS over TCP/IP Datagram Distribution Server Option", OptionFormat.ip),
 		 46 : DHCPOptionSpec("NetBIOS over TCP/IP Node Type Option", OptionFormat.netbiosNodeType),
@@ -426,12 +427,32 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 					)
 				);
 				break;
+			case OptionFormat.vendorSpecificInformation:
+			{
+				const(ubyte)[] rem = bytes;
+				while (rem.length)
+				{
+					enforce(rem.length >= 2, "No length byte");
+					auto type = rem[0];
+					auto len = rem[1];
+					rem = rem[2 .. $];
+					enforce(rem.length >= len, "Not enough data");
+					auto data = rem[0 .. len];
+					rem = rem[len .. $];
+					f.writef("%d: %s",
+						type, maybeAscii(data));
+					if (rem.length)
+						f.write(", ");
+				}
+				f.writeln();
+				break;
+			}
 			case OptionFormat.relayAgent:
 				f.writeln((const RelayAgentInformation(bytes)).toString());
 				break;
 		}
 	catch (Exception e)
-		f.writefln("Decode error(%s). Raw bytes: %s",
+		f.writefln("Decode error (%s). Raw bytes: %s",
 			e.msg, maybeAscii(bytes));
 }
 
@@ -442,6 +463,7 @@ void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
 		case OptionFormat.none:
 		case OptionFormat.hex:
 		case OptionFormat.relayAgent:
+		case OptionFormat.vendorSpecificInformation:
 			f.writefln("%-(%02X%)", bytes);
 			break;
 		case OptionFormat.str:
@@ -648,6 +670,7 @@ DHCPPacket generatePacket(ubyte[] mac)
 					.array();
 				break;
 			case OptionFormat.relayAgent:
+			case OptionFormat.vendorSpecificInformation:
 				throw new Exception(format("Sorry, the format %s is unsupported for parsing. Please specify another format explicitly.", fmt));
 		}
 		packet.options ~= DHCPOption(opt, bytes);
