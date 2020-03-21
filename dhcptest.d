@@ -26,14 +26,14 @@ import std.string;
 import std.socket;
 import std.traits;
 
-version(Windows)
+version (Windows)
 	static if (__VERSION__ >= 2067)
 		import core.sys.windows.winsock2 : ntohs, htons, ntohl, htonl;
 	else
 		import std.c.windows.winsock : ntohs, htons, ntohl, htonl;
 else
-version(Posix)
-	import core.sys.posix.netdb  : ntohs, htons, ntohl, htonl;
+version (Posix)
+	import core.sys.posix.netdb : ntohs, htons, ntohl, htonl;
 else
 	static assert(false, "Unsupported platform");
 
@@ -809,7 +809,9 @@ int run(string[] args)
 		stderr.writeln("                  You can specify hexadecimal or IPv4-formatted options using");
 		stderr.writeln("                  --option \"N[hex]=...\" or --option \"N[IP]=...\"");
 		stderr.writeln("                  Supported FORMAT types:");
-		stderr.write("%-(%s, %)".format(EnumMembers!OptionFormat[1..$].only.uniq).wrap(79, "                    ", "                    "));
+		stderr.write("%-(%s, %)".format(EnumMembers!OptionFormat[1..$].only.uniq).wrap(79,
+				/*  */ "                    ",
+				/*  */ "                    "));
 		stderr.writeln("  --request N     Uses DHCP option 55 (\"Parameter Request List\") to");
 		stderr.writeln("                  explicitly request the specified option from the server.");
 		stderr.writeln("                  Can be repeated several times to request multiple options.");
