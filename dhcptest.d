@@ -267,9 +267,9 @@ DHCPPacket parsePacket(ubyte[] data)
 	ubyte readByte()
 	{
 		enforce(data.length, "Unexpected end of packet");
-		ubyte result = data[0];
+		ubyte b = data[0];
 		data = data[1..$];
-		return result;
+		return b;
 	}
 
 	while (true)
