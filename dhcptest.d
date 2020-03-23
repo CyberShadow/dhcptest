@@ -15,6 +15,7 @@ import core.thread;
 
 import std.algorithm;
 import std.array;
+import std.bitmanip;
 import std.conv;
 import std.datetime;
 import std.exception;
@@ -36,6 +37,82 @@ version (Posix)
 	import core.sys.posix.netdb : ntohs, htons, ntohl, htonl;
 else
 	static assert(false, "Unsupported platform");
+
+version (linux)
+{
+	import core.sys.linux.sys.socket;
+	import core.sys.posix.net.if_ : IF_NAMESIZE;
+	import core.sys.posix.sys.ioctl : ioctl, SIOCGIFINDEX;
+
+	enum IFNAMSIZ = IF_NAMESIZE;
+	extern(C) struct ifreq
+	{
+		char[IFNAMSIZ] ifr_name = 0;
+		union
+		{
+			private ubyte[IFNAMSIZ] _zeroinit = 0;
+			sockaddr       ifr_addr;
+			sockaddr       ifr_dstaddr;
+			sockaddr       ifr_broadaddr;
+			sockaddr       ifr_netmask;
+			sockaddr       ifr_hwaddr;
+			short          ifr_flags;
+			int            ifr_ifindex;
+			int            ifr_metric;
+			int            ifr_mtu;
+		//	ifmap          ifr_map;
+			char[IFNAMSIZ] ifr_slave;
+			char[IFNAMSIZ] ifr_newname;
+			char*          ifr_data;
+		}
+	}
+
+	extern(C) struct sockaddr_ll
+	{
+		ushort   sll_family;
+		ushort   sll_protocol;
+		int      sll_ifindex;
+		ushort   sll_hatype;
+		ubyte    sll_pkttype;
+		ubyte    sll_halen;
+		ubyte[8] sll_addr;
+	}
+
+	struct ether_header
+	{
+		ubyte[6] ether_dhost;
+		ubyte[6] ether_shost;
+		ushort	ether_type;
+	}
+
+	struct iphdr
+	{
+		mixin(bitfields!(
+			ubyte, q{ihl}, 4,
+			ubyte, q{ver}, 4,
+		));
+		ubyte tos;
+		ushort tot_len;
+		ushort id;
+		ushort frag_off;
+		ubyte ttl;
+		ubyte protocol;
+		ushort check;
+		uint saddr;
+		uint daddr;
+	}
+
+	struct udphdr
+	{
+		ushort uh_sport;
+		ushort uh_dport;
+		ushort uh_ulen;
+		ushort uh_sum;
+	}
+
+	enum ETH_P_IP = 0x0800;
+	enum IP_DF = 0x4000;
+}
 
 /// Header (part up to the option fields) of a DHCP packet, as on wire.
 align(1)
@@ -678,7 +755,24 @@ DHCPPacket generatePacket(ubyte[] mac)
 	return packet;
 }
 
-void sendPacket(Socket socket, DHCPPacket packet)
+ushort ipChecksum(void[] data)
+{
+	if (data.length % 2)
+		data.length = data.length + 1;
+	auto words = cast(ushort[])data;
+	uint checksum = 0xffff;
+
+	foreach (word; words)
+	{
+		checksum += ntohs(word);
+		if (checksum > 0xffff)
+			checksum -= 0xffff;
+	}
+
+    return htons((~checksum) & 0xFFFF);
+}
+
+void sendPacket(Socket socket, Address addr, ubyte[] mac, DHCPPacket packet)
 {
 	if (!quiet)
 	{
@@ -686,7 +780,57 @@ void sendPacket(Socket socket, DHCPPacket packet)
 		stderr.printPacket(packet);
 	}
 	auto data = serializePacket(packet);
-	auto sent = socket.sendTo(data, new InternetAddress("255.255.255.255", SERVER_PORT));
+	if (socket.addressFamily != AF_INET)
+	{
+		static struct Header
+		{
+		align(1):
+			ether_header ether;
+			iphdr ip;
+			udphdr udp;
+		}
+		Header header;
+		header.ether.ether_dhost[] = 0xFF; // broadcast
+		header.ether.ether_shost[] = mac;
+		header.ether.ether_type = ETH_P_IP.htons;
+		static assert(iphdr.sizeof % 4 == 0);
+		header.ip.ihl = iphdr.sizeof / 4;
+		header.ip.ver = 4;
+		header.ip.tot_len = (header.ip.sizeof + header.udp.sizeof + data.length).to!ushort.htons;
+		static ushort idCounter;
+		header.ip.id = ++idCounter;
+	//	header.ip.frag_off = IP_DF.htons;
+		header.ip.ttl = 0x40;
+		header.ip.protocol = IPPROTO_UDP;
+		header.ip.saddr = 0x00000000; // 0.0.0.0
+		header.ip.daddr = 0xFFFFFFFF; // 255.255.255.255
+		header.ip.check = ipChecksum((&header.ip)[0..1]);
+
+		header.udp.uh_sport = CLIENT_PORT.htons;
+		header.udp.uh_dport = SERVER_PORT.htons;
+		header.udp.uh_ulen = (header.udp.sizeof + data.length).to!ushort.htons;
+
+		static struct UDPChecksumData
+		{
+			uint saddr;
+			uint daddr;
+			ubyte zeroes = 0x0;
+			ubyte proto = IPPROTO_UDP;
+			ushort udp_len;
+			udphdr udp;
+		}
+		UDPChecksumData udpChecksumData;
+		udpChecksumData.saddr = header.ip.saddr;
+		udpChecksumData.daddr = header.ip.daddr;
+		udpChecksumData.udp_len = header.udp.uh_ulen;
+		udpChecksumData.udp = header.udp;
+		header.udp.uh_sum = ipChecksum(cast(ubyte[])(&udpChecksumData)[0..1] ~ data);
+
+		data = cast(ubyte[])(&header)[0..1] ~ data;
+		// static import std.file; std.file.write("packet.bin", "000000 %(%02x %|%)".format(data));
+	}
+
+	auto sent = socket.sendTo(data, addr);
 	enforce(sent > 0, "sendto error");
 	enforce(sent == data.length, "Sent only %d/%d bytes".format(sent, data.length));
 }
@@ -738,12 +882,21 @@ ubyte[] parseMac(string mac)
 	return mac.split(":").map!(s => s.parse!ubyte(16)).array();
 }
 
+version(Posix) int getIfaceIndex(Socket s, string name)
+{
+	ifreq req;
+	auto len = min(name.length, req.ifr_name.length);
+	req.ifr_name[0 .. len] = name[0 .. len];
+	errnoEnforce(ioctl(s.handle, SIOCGIFINDEX, &req) == 0, "SIOCGIFINDEX failed");
+	return req.ifr_ifindex;
+}
+
 int run(string[] args)
 {
 	string bindAddr = "0.0.0.0";
 	string iface = null;
 	ubyte[] defaultMac = 6.iota.map!(i => i == 0 ? ubyte((uniform!ubyte & 0xFC) | 0x02u) : uniform!ubyte).array;
-	bool help, query, wait;
+	bool help, query, wait, raw;
 	float timeoutSeconds = 60f;
 	uint tries = 1;
 
@@ -753,6 +906,7 @@ int run(string[] args)
 		"h|help", &help,
 		"bind", &bindAddr,
 		"iface", &iface,
+		"r|raw", &raw,
 		"mac", (string opt, string value) { defaultMac = parseMac(value); },
 		"secs", &requestSecs,
 		"q|quiet", &quiet,
@@ -787,6 +941,7 @@ int run(string[] args)
 		stderr.writeln("                  The default is to listen on all interfaces (0.0.0.0).");
 		stderr.writeln("                  On Linux, you should use --iface instead.");
 		stderr.writeln("  --iface NAME    Bind to the specified network interface name.  Linux only.");
+		stderr.writeln("  --raw           Use raw sockets.  Linux only.  Use with --iface.");
 		stderr.writeln("  --mac MAC       Specify a MAC address to use for the client hardware");
 		stderr.writeln("                  address field (chaddr), in the format NN:NN:NN:NN:NN:NN");
 		stderr.writeln("  --secs          Specify the \"Secs\" request field (number of seconds elapsed");
@@ -825,8 +980,34 @@ int run(string[] args)
 		return 0;
 	}
 
-	auto socket = new UdpSocket();
-	socket.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
+	auto receiveSocket = new UdpSocket();
+	receiveSocket.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
+	Socket sendSocket;
+	Address sendAddr;
+	if (raw)
+	{
+		static if (is(typeof(AF_PACKET)))
+		{
+			sendSocket = new Socket(cast(AddressFamily)AF_PACKET, SocketType.RAW, ProtocolType.RAW);
+
+			enforce(iface, "Interface not specified, please specify an interface with --iface");
+			auto ifaceIndex = getIfaceIndex(sendSocket, iface);
+
+			enum ETH_ALEN = 6;
+			auto llAddr = new sockaddr_ll;
+			llAddr.sll_ifindex = ifaceIndex;
+			llAddr.sll_halen = ETH_ALEN;
+			llAddr.sll_addr[0 .. 6] = 0xFF;
+			sendAddr = new UnknownAddressReference(cast(sockaddr*)llAddr, sockaddr_ll.sizeof);
+		}
+		else
+			throw new Exception("Raw sockets are not supported on this platform.");
+	}
+	else
+	{
+		sendSocket = receiveSocket;
+		sendAddr = new InternetAddress("255.255.255.255", SERVER_PORT);
+	}
 
 	void bindSocket()
 	{
@@ -835,14 +1016,14 @@ int run(string[] args)
 			if (iface)
 			{
 				enum SO_BINDTODEVICE = cast(SocketOption)25;
-				socket.setOption(SocketOptionLevel.SOCKET, SO_BINDTODEVICE, cast(void[])iface);
+				receiveSocket.setOption(SocketOptionLevel.SOCKET, SO_BINDTODEVICE, cast(void[])iface);
 			}
 		}
 		else
 			enforce(iface is null, "--iface is not available on this platform");
 
-		socket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
-		socket.bind(getAddress(bindAddr, CLIENT_PORT)[0]);
+		receiveSocket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
+		receiveSocket.bind(getAddress(bindAddr, CLIENT_PORT)[0]);
 		if (!quiet) stderr.writefln("Listening for DHCP replies on port %d.", CLIENT_PORT);
 	}
 
@@ -862,7 +1043,7 @@ int run(string[] args)
 		{
 			try
 			{
-				socket.receivePackets((DHCPPacket packet, Address address)
+				receiveSocket.receivePackets((DHCPPacket packet, Address address)
 				{
 					if (!quiet) stderr.writefln("Received packet from %s:", address);
 					stdout.printPacket(packet);
@@ -897,7 +1078,7 @@ int run(string[] args)
 				case "discover":
 				{
 					ubyte[] mac = line.length > 1 ? parseMac(line[1]) : defaultMac;
-					socket.sendPacket(generatePacket(mac));
+					sendSocket.sendPacket(sendAddr, mac, generatePacket(mac));
 					break;
 				}
 
@@ -945,7 +1126,7 @@ int run(string[] args)
 			SysTime start = Clock.currTime();
 			SysTime end = start + timeout;
 
-			socket.sendPacket(sentPacket);
+			sendSocket.sendPacket(sendAddr, defaultMac, sentPacket);
 			
 			while (true)
 			{
@@ -953,7 +1134,7 @@ int run(string[] args)
 				if (remaining <= Duration.zero)
 					break;
 
-				auto result = socket.receivePackets((DHCPPacket packet, Address address)
+				auto result = receiveSocket.receivePackets((DHCPPacket packet, Address address)
 				{
 					if (packet.header.xid != sentPacket.header.xid)
 						return true;
