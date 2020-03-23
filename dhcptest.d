@@ -555,14 +555,12 @@ DHCPPacket generatePacket(ubyte[] mac)
 	DHCPPacket packet;
 	packet.header.op = 1; // BOOTREQUEST
 	packet.header.htype = 1;
-	packet.header.hlen = 6;
+	packet.header.hlen = mac.length.to!ubyte;
 	packet.header.hops = 0;
 	packet.header.xid = uniform!uint();
 	packet.header.secs = requestSecs;
 	packet.header.flags = htons(0x8000); // Set BROADCAST flag - required to be able to receive a reply to an imaginary hardware address
 	packet.header.chaddr[0..mac.length] = mac;
-	foreach (ref b; packet.header.chaddr[mac.length..packet.header.hlen])
-		b = uniform!ubyte();
 	if (requestedOptions.length)
 		packet.options ~= DHCPOption(DHCPOptionType.parameterRequestList, cast(ubyte[])requestedOptions.map!parseDHCPOptionType.array);
 	foreach (option; sentOptions)
@@ -744,7 +742,7 @@ int run(string[] args)
 {
 	string bindAddr = "0.0.0.0";
 	string iface = null;
-	string defaultMac;
+	ubyte[] defaultMac = 6.iota.map!(i => i == 0 ? ubyte((uniform!ubyte & 0xFC) | 0x02u) : uniform!ubyte).array;
 	bool help, query, wait;
 	float timeoutSeconds = 60f;
 	uint tries = 1;
@@ -755,7 +753,7 @@ int run(string[] args)
 		"h|help", &help,
 		"bind", &bindAddr,
 		"iface", &iface,
-		"mac", &defaultMac,
+		"mac", (string opt, string value) { defaultMac = parseMac(value); },
 		"secs", &requestSecs,
 		"q|quiet", &quiet,
 		"query", &query,
@@ -898,8 +896,8 @@ int run(string[] args)
 				case "d":
 				case "discover":
 				{
-					string mac = line.length > 1 ? line[1] : defaultMac;
-					socket.sendPacket(generatePacket(parseMac(mac)));
+					ubyte[] mac = line.length > 1 ? parseMac(line[1]) : defaultMac;
+					socket.sendPacket(generatePacket(mac));
 					break;
 				}
 
@@ -936,7 +934,7 @@ int run(string[] args)
 			timeout = forever;
 
 		bindSocket();
-		auto sentPacket = generatePacket(parseMac(defaultMac));
+		auto sentPacket = generatePacket(defaultMac);
 
 		int count = 0;
 		
