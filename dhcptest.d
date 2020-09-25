@@ -780,6 +780,7 @@ void sendPacket(Socket socket, Address addr, ubyte[] mac, DHCPPacket packet)
 		stderr.printPacket(packet);
 	}
 	auto data = serializePacket(packet);
+	static if (is(typeof(AF_PACKET)))
 	if (socket.addressFamily != AF_INET)
 	{
 		static struct Header
