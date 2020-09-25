@@ -772,7 +772,7 @@ ushort ipChecksum(void[] data)
     return htons((~checksum) & 0xFFFF);
 }
 
-void sendPacket(Socket socket, Address addr, ubyte[] mac, DHCPPacket packet)
+void sendPacket(Socket socket, Address addr, string targetIP, ubyte[] mac, DHCPPacket packet)
 {
 	if (!quiet)
 	{
@@ -804,7 +804,7 @@ void sendPacket(Socket socket, Address addr, ubyte[] mac, DHCPPacket packet)
 		header.ip.ttl = 0x40;
 		header.ip.protocol = IPPROTO_UDP;
 		header.ip.saddr = 0x00000000; // 0.0.0.0
-		header.ip.daddr = 0xFFFFFFFF; // 255.255.255.255
+		inet_pton(AF_INET, targetIP.toStringz, &header.ip.daddr).enforce("Invalid target IP address");
 		header.ip.check = ipChecksum((&header.ip)[0..1]);
 
 		header.udp.uh_sport = CLIENT_PORT.htons;
@@ -892,10 +892,13 @@ version(Posix) int getIfaceIndex(Socket s, string name)
 	return req.ifr_ifindex;
 }
 
+immutable targetBroadcast = "255.255.255.255";
+
 int run(string[] args)
 {
 	string bindAddr = "0.0.0.0";
 	string iface = null;
+	string target = targetBroadcast;
 	ubyte[] defaultMac = 6.iota.map!(i => i == 0 ? ubyte((uniform!ubyte & 0xFC) | 0x02u) : uniform!ubyte).array;
 	bool help, query, wait, raw;
 	float timeoutSeconds = 60f;
@@ -906,9 +909,10 @@ int run(string[] args)
 	getopt(args,
 		"h|help", &help,
 		"bind", &bindAddr,
+		"target", &target,
 		"iface", &iface,
 		"r|raw", &raw,
-		"mac", (string opt, string value) { defaultMac = parseMac(value); },
+		"mac", (string mac, string value) { defaultMac = parseMac(value); },
 		"secs", &requestSecs,
 		"q|quiet", &quiet,
 		"query", &query,
@@ -921,7 +925,7 @@ int run(string[] args)
 	);
 
 	if (wait) enforce(query, "Option --wait only supported with --query");
-	
+
 	/// https://issues.dlang.org/show_bug.cgi?id=6725
 	auto timeout = dur!"hnsecs"(cast(long)(convert!("seconds", "hnsecs")(1) * timeoutSeconds));
 
@@ -941,8 +945,11 @@ int run(string[] args)
 		stderr.writeln("  --bind IP       Listen on the interface with the specified IP.");
 		stderr.writeln("                  The default is to listen on all interfaces (0.0.0.0).");
 		stderr.writeln("                  On Linux, you should use --iface instead.");
+		stderr.writeln("  --target IP     Instead of sending a broadcast packet, send a normal packet");
+		stderr.writeln("                  to this IP.");
 		stderr.writeln("  --iface NAME    Bind to the specified network interface name.  Linux only.");
-		stderr.writeln("  --raw           Use raw sockets.  Linux only.  Use with --iface.");
+		stderr.writeln("  --raw           Use raw sockets.  Allows spoofing the MAC address in the ");
+		stderr.writeln("                  Ethernet header.  Linux only.  Use with --iface.");
 		stderr.writeln("  --mac MAC       Specify a MAC address to use for the client hardware");
 		stderr.writeln("                  address field (chaddr), in the format NN:NN:NN:NN:NN:NN");
 		stderr.writeln("  --secs          Specify the \"Secs\" request field (number of seconds elapsed");
@@ -982,7 +989,8 @@ int run(string[] args)
 	}
 
 	auto receiveSocket = new UdpSocket();
-	receiveSocket.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
+	if (target == targetBroadcast)
+		receiveSocket.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
 	Socket sendSocket;
 	Address sendAddr;
 	if (raw)
@@ -1007,7 +1015,7 @@ int run(string[] args)
 	else
 	{
 		sendSocket = receiveSocket;
-		sendAddr = new InternetAddress("255.255.255.255", SERVER_PORT);
+		sendAddr = new InternetAddress(target, SERVER_PORT);
 	}
 
 	void bindSocket()
@@ -1079,7 +1087,7 @@ int run(string[] args)
 				case "discover":
 				{
 					ubyte[] mac = line.length > 1 ? parseMac(line[1]) : defaultMac;
-					sendSocket.sendPacket(sendAddr, mac, generatePacket(mac));
+					sendSocket.sendPacket(sendAddr, target, mac, generatePacket(mac));
 					break;
 				}
 
@@ -1127,7 +1135,7 @@ int run(string[] args)
 			SysTime start = Clock.currTime();
 			SysTime end = start + timeout;
 
-			sendSocket.sendPacket(sendAddr, defaultMac, sentPacket);
+			sendSocket.sendPacket(sendAddr, target, defaultMac, sentPacket);
 			
 			while (true)
 			{
