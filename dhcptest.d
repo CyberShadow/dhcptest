@@ -883,7 +883,7 @@ ubyte[] parseMac(string mac)
 	return mac.split(":").map!(s => s.parse!ubyte(16)).array();
 }
 
-version(Posix) int getIfaceIndex(Socket s, string name)
+version(linux) int getIfaceIndex(Socket s, string name)
 {
 	ifreq req;
 	auto len = min(name.length, req.ifr_name.length);
