@@ -4,15 +4,15 @@ This is a DHCP test tool. It can send DHCP discover packets, and listen for DHCP
 
 The tool is cross-platform, although you will need to compile it yourself for non-Windows platforms.
 
-The tool is written in the [D Programming Language](http://dlang.org/).
+The tool is written in the [D Programming Language](https://dlang.org/).
 
 ## Download
 
-You can download a compiled Windows executable from my website, [here](http://files.thecybershadow.net/dhcptest/).
+You can download a compiled Windows executable from my website, [here](https://files.cy.md/dhcptest/).
 
 ## Building
 
-With [DMD](http://dlang.org/download.html#dmd) (or another D compiler) installed, run:
+With [DMD](https://dlang.org/download.html#dmd) (or another D compiler) installed, run:
 
 ```
 $ dmd dhcptest.d
@@ -52,11 +52,11 @@ using the `--option` switch:
 
 Run `dhcptest --help` for further details and additional command-line parameters.
 
-For a list and description of DHCP options, see [RFC 2132](http://tools.ietf.org/html/rfc2132).
+For a list and description of DHCP options, see [RFC 2132](https://datatracker.ietf.org/doc/html/rfc2132).
 
 ## License
 
-`dhcptest` is available under the [Boost Software License 1.0](http://www.boost.org/LICENSE_1_0.txt).
+`dhcptest` is available under the [Boost Software License 1.0](https://www.boost.org/LICENSE_1_0.txt).
 
 ## Changelog
 
