@@ -627,7 +627,7 @@ string[] requestedOptions;
 string[] sentOptions;
 ushort requestSecs = 0;
 
-DHCPPacket generatePacket(ubyte[] mac)
+DHCPPacket generatePacket(ubyte[] mac, uint giaddr)
 {
 	DHCPPacket packet;
 	packet.header.op = 1; // BOOTREQUEST
@@ -638,6 +638,7 @@ DHCPPacket generatePacket(ubyte[] mac)
 	packet.header.secs = requestSecs;
 	packet.header.flags = htons(0x8000); // Set BROADCAST flag - required to be able to receive a reply to an imaginary hardware address
 	packet.header.chaddr[0..mac.length] = mac;
+	packet.header.giaddr = giaddr;
 	if (requestedOptions.length)
 		packet.options ~= DHCPOption(DHCPOptionType.parameterRequestList, cast(ubyte[])requestedOptions.map!parseDHCPOptionType.array);
 	foreach (option; sentOptions)
@@ -899,6 +900,8 @@ int run(string[] args)
 	string bindAddr = "0.0.0.0";
 	string iface = null;
 	string target = targetBroadcast;
+	string giaddrStr = "0.0.0.0";
+	uint giaddr = 0;
 	ubyte[] defaultMac = 6.iota.map!(i => i == 0 ? ubyte((uniform!ubyte & 0xFC) | 0x02u) : uniform!ubyte).array;
 	bool help, query, wait, raw;
 	float timeoutSeconds = 60f;
@@ -910,6 +913,7 @@ int run(string[] args)
 		"h|help", &help,
 		"bind", &bindAddr,
 		"target", &target,
+		"giaddr", &giaddrStr,
 		"iface", &iface,
 		"r|raw", &raw,
 		"mac", (string mac, string value) { defaultMac = parseMac(value); },
@@ -947,6 +951,7 @@ int run(string[] args)
 		stderr.writeln("                  On Linux, you should use --iface instead.");
 		stderr.writeln("  --target IP     Instead of sending a broadcast packet, send a normal packet");
 		stderr.writeln("                  to this IP.");
+		stderr.writeln("  --giaddr IP     Set giaddr to the specified relay agent IP address.");
 		stderr.writeln("  --iface NAME    Bind to the specified network interface name.  Linux only.");
 		stderr.writeln("  --raw           Use raw sockets.  Allows spoofing the MAC address in the ");
 		stderr.writeln("                  Ethernet header.  Linux only.  Use with --iface.");
@@ -1018,6 +1023,9 @@ int run(string[] args)
 		sendAddr = new InternetAddress(target, SERVER_PORT);
 	}
 
+	// Parse giaddr
+	inet_pton(AF_INET, giaddrStr.toStringz, &giaddr).enforce("Invalid giaddr.");
+
 	void bindSocket()
 	{
 		version (linux)
@@ -1087,7 +1095,7 @@ int run(string[] args)
 				case "discover":
 				{
 					ubyte[] mac = line.length > 1 ? parseMac(line[1]) : defaultMac;
-					sendSocket.sendPacket(sendAddr, target, mac, generatePacket(mac));
+					sendSocket.sendPacket(sendAddr, target, mac, generatePacket(mac, giaddr));
 					break;
 				}
 
@@ -1124,7 +1132,7 @@ int run(string[] args)
 			timeout = forever;
 
 		bindSocket();
-		auto sentPacket = generatePacket(defaultMac);
+		auto sentPacket = generatePacket(defaultMac, giaddr);
 
 		int count = 0;
 		
