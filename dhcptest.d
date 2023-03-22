@@ -1024,7 +1024,7 @@ int run(string[] args)
 	}
 
 	// Parse giaddr
-	inet_pton(AF_INET, giaddrStr.toStringz, &giaddr).enforce("Invalid giaddr.");
+	giaddr = (new InternetAddress(giaddrStr, 0)).addr.htonl();
 
 	void bindSocket()
 	{
