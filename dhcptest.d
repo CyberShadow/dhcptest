@@ -626,8 +626,9 @@ enum CLIENT_PORT = 68;
 string[] requestedOptions;
 string[] sentOptions;
 ushort requestSecs = 0;
+uint giaddr;
 
-DHCPPacket generatePacket(ubyte[] mac, uint giaddr)
+DHCPPacket generatePacket(ubyte[] mac)
 {
 	DHCPPacket packet;
 	packet.header.op = 1; // BOOTREQUEST
@@ -901,7 +902,6 @@ int run(string[] args)
 	string iface = null;
 	string target = targetBroadcast;
 	string giaddrStr = "0.0.0.0";
-	uint giaddr = 0;
 	ubyte[] defaultMac = 6.iota.map!(i => i == 0 ? ubyte((uniform!ubyte & 0xFC) | 0x02u) : uniform!ubyte).array;
 	bool help, query, wait, raw;
 	float timeoutSeconds = 60f;
@@ -1095,7 +1095,7 @@ int run(string[] args)
 				case "discover":
 				{
 					ubyte[] mac = line.length > 1 ? parseMac(line[1]) : defaultMac;
-					sendSocket.sendPacket(sendAddr, target, mac, generatePacket(mac, giaddr));
+					sendSocket.sendPacket(sendAddr, target, mac, generatePacket(mac));
 					break;
 				}
 
@@ -1132,7 +1132,7 @@ int run(string[] args)
 			timeout = forever;
 
 		bindSocket();
-		auto sentPacket = generatePacket(defaultMac, giaddr);
+		auto sentPacket = generatePacket(defaultMac);
 
 		int count = 0;
 		
