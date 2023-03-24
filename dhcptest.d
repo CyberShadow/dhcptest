@@ -623,6 +623,9 @@ void printPacket(File f, DHCPPacket packet)
 enum SERVER_PORT = 67;
 enum CLIENT_PORT = 68;
 
+ushort serverPort = SERVER_PORT;
+ushort clientPort = CLIENT_PORT;
+
 string[] requestedOptions;
 string[] sentOptions;
 ushort requestSecs = 0;
@@ -809,8 +812,8 @@ void sendPacket(Socket socket, Address addr, string targetIP, ubyte[] mac, DHCPP
 		inet_pton(AF_INET, targetIP.toStringz, &header.ip.daddr).enforce("Invalid target IP address");
 		header.ip.check = ipChecksum((&header.ip)[0..1]);
 
-		header.udp.uh_sport = CLIENT_PORT.htons;
-		header.udp.uh_dport = SERVER_PORT.htons;
+		header.udp.uh_sport = clientPort.htons;
+		header.udp.uh_dport = serverPort.htons;
 		header.udp.uh_ulen = (header.udp.sizeof + data.length).to!ushort.htons;
 
 		static struct UDPChecksumData
@@ -913,6 +916,8 @@ int run(string[] args)
 		"h|help", &help,
 		"bind", &bindAddr,
 		"target", &target,
+		"bind-port", &clientPort,
+		"target-port", &serverPort,
 		"giaddr", &giaddrStr,
 		"iface", &iface,
 		"r|raw", &raw,
@@ -951,6 +956,9 @@ int run(string[] args)
 		stderr.writeln("                  On Linux, you should use --iface instead.");
 		stderr.writeln("  --target IP     Instead of sending a broadcast packet, send a normal packet");
 		stderr.writeln("                  to this IP.");
+		stderr.writeln("  --bind-port N   Listen on and send packets from this port number instead of");
+		stderr.writeln("                  the standard %d.".format(CLIENT_PORT));
+		stderr.writeln("  --target-port N Send packets to this port instead of the standard %d.".format(SERVER_PORT));
 		stderr.writeln("  --giaddr IP     Set giaddr to the specified relay agent IP address.");
 		stderr.writeln("  --iface NAME    Bind to the specified network interface name.  Linux only.");
 		stderr.writeln("  --raw           Use raw sockets.  Allows spoofing the MAC address in the ");
@@ -1020,7 +1028,7 @@ int run(string[] args)
 	else
 	{
 		sendSocket = receiveSocket;
-		sendAddr = new InternetAddress(target, SERVER_PORT);
+		sendAddr = new InternetAddress(target, serverPort);
 	}
 
 	// Parse giaddr
@@ -1040,8 +1048,8 @@ int run(string[] args)
 			enforce(iface is null, "--iface is not available on this platform");
 
 		receiveSocket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
-		receiveSocket.bind(getAddress(bindAddr, CLIENT_PORT)[0]);
-		if (!quiet) stderr.writefln("Listening for DHCP replies on port %d.", CLIENT_PORT);
+		receiveSocket.bind(getAddress(bindAddr, clientPort)[0]);
+		if (!quiet) stderr.writefln("Listening for DHCP replies on port %d.", clientPort);
 	}
 
 	void runPrompt()
