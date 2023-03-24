@@ -10,6 +10,8 @@ The tool is written in the [D Programming Language](https://dlang.org/).
 
 You can download a compiled Windows executable from my website, [here](https://files.cy.md/dhcptest/).
 
+The latest development build for Windows can be downloaded from [GitHub Actions](https://github.com/CyberShadow/dhcptest/actions/workflows/test.yml?query=branch%3Amaster).
+
 ## Building
 
 With [DMD](https://dlang.org/download.html#dmd) (or another D compiler) installed, run:
