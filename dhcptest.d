@@ -543,6 +543,13 @@ unittest
 	);
 }
 
+enum VendorSpecificInformationSuboption
+{
+	raw = -1, // Not a real sub-option - used to store slack / unparseable bytes
+}
+
+alias VendorSpecificInformation = VLList!VendorSpecificInformationSuboption;
+
 __gshared string printOnly;
 __gshared bool quiet;
 
@@ -602,25 +609,8 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 				);
 				break;
 			case OptionFormat.vendorSpecificInformation:
-			{
-				const(ubyte)[] rem = bytes;
-				while (rem.length)
-				{
-					enforce(rem.length >= 2, "No length byte");
-					auto type = rem[0];
-					auto len = rem[1];
-					rem = rem[2 .. $];
-					enforce(rem.length >= len, "Not enough data");
-					auto data = rem[0 .. len];
-					rem = rem[len .. $];
-					f.writef("%d: %s",
-						type, maybeAscii(data));
-					if (rem.length)
-						f.write(", ");
-				}
-				f.writeln();
+				f.writeln((const VendorSpecificInformation(bytes)).toString());
 				break;
-			}
 			case OptionFormat.relayAgent:
 				f.writeln((const RelayAgentInformation(bytes)).toString());
 				break;
@@ -851,7 +841,10 @@ DHCPPacket generatePacket(ubyte[] mac)
 				bytes = RelayAgentInformation(value).toBytes().dup;
 				break;
 			case OptionFormat.vendorSpecificInformation:
-				throw new Exception(format("Sorry, the format %s is unsupported for parsing. Please specify another format explicitly.", fmt));
+				bytes = VendorSpecificInformation(value).toBytes().dup;
+				break;
+			// default:
+			// 	throw new Exception(format("Sorry, the format %s is unsupported for parsing. Please specify another format explicitly.", fmt));
 		}
 		packet.options ~= DHCPOption(opt, bytes);
 	}
