@@ -19,6 +19,7 @@ import std.bitmanip;
 import std.conv;
 import std.datetime;
 import std.exception;
+import std.format;
 import std.getopt;
 import std.random;
 import std.range;
@@ -410,18 +411,40 @@ struct RelayAgentInformation
 {
 	struct Suboption
 	{
-		enum Type : ubyte
+		enum Type
 		{
+			raw = -1, // Not a real sub-option - used to store slack / unparseable bytes
+
 			agentCircuitID = 1,
 			agentRemoteID = 2,
 		}
 		Type type;
 		char[] value;
 
-		string toString() const { return format("%s=%s", type, value); }
+		this(Type type, inout(char)[] value) inout { this.type = type; this.value = value; }
+
+		this(ref string s)
+		{
+			enforce(s.formattedRead!"%s"(&type) == 1, "Expected relay agent sub-option type");
+			enforce(s.skipOver("="), "Expected = in relay agent sub-option");
+			value = s.parseElement!(char[])();
+		}
+
+		string toString() const { return format("%s=%(%s%)", type, value.only); }
+
+		const(ubyte)[] toBytes() const pure
+		{
+			const(ubyte)[] result;
+			if (type != Type.raw)
+			{
+				result ~= type.to!ubyte;
+				result ~= (2 + value.representation.length).to!ubyte;
+			}
+			result ~= value.representation;
+			return result;
+		}
 	}
 	Suboption[] suboptions;
-	ubyte[] slack;
 
 	this(inout(ubyte)[] bytes) inout
 	{
@@ -434,22 +457,73 @@ struct RelayAgentInformation
 			suboptions ~= inout Suboption(cast(Suboption.Type)bytes[0], cast(inout(char)[])bytes[2..len]);
 			bytes = bytes[len..$];
 		}
+		if (bytes.length)
+			suboptions ~= inout Suboption(Suboption.Type.raw, cast(inout(char)[]) bytes);
 		this.suboptions = suboptions;
-		this.slack = bytes;
+	}
+
+	this(/*ref*/ string s)
+	{
+		while (s.length)
+		{
+			suboptions ~= Suboption(s);
+			if (s.length)
+			{
+				enforce(s.skipOver(","), "',' expected");
+				while (s.skipOver(" ")) {}
+			}
+		}
 	}
 
 	string toString() const
 	{
-		string result = format("%(%s, %)", suboptions);
-		if (slack.length)
-			result ~= format(" Slack bytes=%(%02X %)", slack);
-		return result;
+		return format!"%-(%s, %)"(suboptions);
 	}
+
+	const(ubyte)[] toBytes() const pure
+	{
+		return suboptions.map!((ref suboption) => suboption.toBytes).join();
+	}
+}
+
+unittest
+{
+	void test(ubyte[] bytes, string str)
+	{
+		auto fromBytes = RelayAgentInformation(bytes);
+		assert(fromBytes.toBytes() == bytes, [fromBytes.toBytes(), bytes].to!string);
+		assert(fromBytes.toString() == str, [fromBytes.toString(), str].to!string);
+		auto fromStr = RelayAgentInformation(str);
+		assert(fromStr.toBytes() == bytes);
+		assert(fromStr.toString() == str);
+	}
+
+	test(
+		[],
+		``
+	);
+	test(
+		[0x00],
+		`raw="\0"`
+	);
+	test(
+		[0x01, 0x05, 'f', 'o', 'o'],
+		`agentCircuitID="foo"`
+	);
+	test(
+		[0x01, 0x05, 'f', 'o', 'o', 0x42],
+		`agentCircuitID="foo", raw="B"`
+	);
+	test(
+		[0x01, 0x05, 'f', 'o', 'o', 0x02, 0x05, 'b', 'a', 'r'],
+		`agentCircuitID="foo", agentRemoteID="bar"`
+	);
 }
 
 __gshared string printOnly;
 __gshared bool quiet;
 
+/// Print an option in a human-readable format.
 void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 {
 	try
@@ -533,6 +607,7 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 			e.msg, maybeAscii(bytes));
 }
 
+/// Print an option in machine-readable format.
 void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
 {
 	final switch (fmt)
@@ -750,6 +825,8 @@ DHCPPacket generatePacket(ubyte[] mac)
 					.array();
 				break;
 			case OptionFormat.relayAgent:
+				bytes = RelayAgentInformation(value).toBytes().dup;
+				break;
 			case OptionFormat.vendorSpecificInformation:
 				throw new Exception(format("Sorry, the format %s is unsupported for parsing. Please specify another format explicitly.", fmt));
 		}

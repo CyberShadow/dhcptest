@@ -11,7 +11,7 @@ jobs:
     - name: Install D compiler
       uses: dlang-community/setup-dlang@1ccbc70a0eff7f264857b53c562aa45fd7f1e479
       with:
-        compiler: dmd-2.080.0
+        compiler: dmd-2.100.0
     - name: Build
       run: dmd dhcptest.d
     - name: Upload binary

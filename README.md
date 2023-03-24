@@ -52,6 +52,10 @@ using the `--option` switch:
 
     dhcptest --query --option "60=Initech Groupware"
 
+Option 82 (Relay Agent Information) can be specified as follows:
+
+    dhcptest --query --option "Relay Agent Information=agentCircuitID=\"foo\", agentRemoteID=\"bar\""
+
 Run `dhcptest --help` for further details and additional command-line parameters.
 
 For a list and description of DHCP options, see [RFC 2132](https://datatracker.ietf.org/doc/html/rfc2132).
