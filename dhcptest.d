@@ -15,6 +15,7 @@ import core.thread;
 
 import std.algorithm;
 import std.array;
+import std.ascii;
 import std.bitmanip;
 import std.conv;
 import std.datetime;
@@ -419,12 +420,26 @@ struct VLList(Type)
 
 		this(ref string s)
 		{
-			enforce(s.formattedRead!"%s"(&type) == 1, "Expected relay agent sub-option type");
+			assert(s.length);
+			if (s[0].isDigit)
+			{
+				ubyte typeByte;
+				enforce(s.formattedRead!"%s"(&typeByte) == 1, "Expected relay agent sub-option type");
+				type = cast(Type)typeByte;
+			}
+			else
+				enforce(s.formattedRead!"%s"(&type) == 1, "Expected relay agent sub-option type");
+
 			enforce(s.skipOver("="), "Expected = in relay agent sub-option");
 			value = s.parseElement!(char[])();
 		}
 
-		string toString() const { return format("%s=%(%s%)", type, value.only); }
+		string toString() const
+		{
+			return format("%s=%(%s%)",
+				type.to!string.startsWith("cast(") ? type.to!ubyte.to!string : type.to!string,
+				value.only);
+		}
 
 		const(ubyte)[] toBytes() const pure
 		{
@@ -521,6 +536,10 @@ unittest
 	test(
 		[0x01, 0x05, 'f', 'o', 'o', 0x02, 0x05, 'b', 'a', 'r'],
 		`agentCircuitID="foo", agentRemoteID="bar"`
+	);
+	test(
+		[0x03, 0x05, 'f', 'o', 'o'],
+		`3="foo"`
 	);
 }
 
