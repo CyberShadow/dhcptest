@@ -407,17 +407,11 @@ DHCPOptionType parseDHCPOptionType(string type)
 	throw new Exception("Unknown DHCP option type: " ~ type);
 }
 
-struct RelayAgentInformation
+// Length-prefixed sub-option list
+struct VLList(Type)
 {
 	struct Suboption
 	{
-		enum Type
-		{
-			raw = -1, // Not a real sub-option - used to store slack / unparseable bytes
-
-			agentCircuitID = 1,
-			agentRemoteID = 2,
-		}
 		Type type;
 		char[] value;
 
@@ -454,11 +448,11 @@ struct RelayAgentInformation
 			auto len = bytes[1];
 			if (len < 2 || len > bytes.length)
 				break;
-			suboptions ~= inout Suboption(cast(Suboption.Type)bytes[0], cast(inout(char)[])bytes[2..len]);
+			suboptions ~= inout Suboption(cast(Type)bytes[0], cast(inout(char)[])bytes[2..len]);
 			bytes = bytes[len..$];
 		}
 		if (bytes.length)
-			suboptions ~= inout Suboption(Suboption.Type.raw, cast(inout(char)[]) bytes);
+			suboptions ~= inout Suboption(Type.raw, cast(inout(char)[]) bytes);
 		this.suboptions = suboptions;
 	}
 
@@ -485,6 +479,16 @@ struct RelayAgentInformation
 		return suboptions.map!((ref suboption) => suboption.toBytes).join();
 	}
 }
+
+enum RelayAgentInformationSuboption
+{
+	raw = -1, // Not a real sub-option - used to store slack / unparseable bytes
+
+	agentCircuitID = 1,
+	agentRemoteID = 2,
+}
+
+alias RelayAgentInformation = VLList!RelayAgentInformationSuboption;
 
 unittest
 {
