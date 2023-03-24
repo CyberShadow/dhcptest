@@ -62,11 +62,19 @@ For a list and description of DHCP options, see [RFC 2132](https://datatracker.i
 
 ## Changelog
 
+### dhcptest v0.8 (????-??-??)
+
+ * Add `--iface` option for Linux
+ * Add support for Linux raw sockets (`--raw`)
+ * Add `--bind`, `--target`, and `--target-port` options
+ * Add `--giaddr` option (contributed by [pcsegal](https://github.com/pcsegal)
+ * Improve formatting and parsing of many options
+
 ### dhcptest v0.7 (2017-08-03)
 
  * Refactor and improve option value parsing
- * Allow specifying all supported format types in both --option and
-   --print-only switches
+ * Allow specifying all supported format types in both `--option` and
+   `--print-only` switches
  * Allow specifying DHCP option types by name as well as by number
  * Allow overriding the request type option. E.g., you can now send
    'request' (instead of 'discover') packets using:
