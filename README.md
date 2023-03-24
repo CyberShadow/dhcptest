@@ -66,7 +66,7 @@ For a list and description of DHCP options, see [RFC 2132](https://datatracker.i
 
 ## Changelog
 
-### dhcptest v0.8 (????-??-??)
+### dhcptest v0.8 (2023-03-24)
 
  * Add `--iface` option for Linux
  * Add support for Linux raw sockets (`--raw`)

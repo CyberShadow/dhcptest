@@ -1,5 +1,5 @@
-#define VER 0,7,0,0
-#define VER_STR "0.7"
+#define VER 0,8,0,0
+#define VER_STR "0.8"
 
 #include <windows.h>
 
