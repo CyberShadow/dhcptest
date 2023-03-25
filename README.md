@@ -71,7 +71,7 @@ For a list and description of DHCP options, see [RFC 2132](https://datatracker.i
  * Add `--iface` option for Linux
  * Add support for Linux raw sockets (`--raw`)
  * Add `--bind`, `--target`, and `--target-port` options
- * Add `--giaddr` option (contributed by [pcsegal](https://github.com/pcsegal)
+ * Add `--giaddr` option (contributed by [pcsegal](https://github.com/pcsegal))
  * Improve formatting and parsing of many options
 
 ### dhcptest v0.7 (2017-08-03)
