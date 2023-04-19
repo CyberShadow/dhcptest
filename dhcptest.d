@@ -239,6 +239,7 @@ enum OptionFormat
 	netbiosNodeType,
 	relayAgent, // RFC 3046
 	vendorSpecificInformation,
+	route
 }
 
 struct DHCPOptionSpec
@@ -328,6 +329,7 @@ static this()
 		 75 : DHCPOptionSpec("StreetTalk Server Option", OptionFormat.ip),
 		 76 : DHCPOptionSpec("StreetTalk Directory Assistance (STDA) Server Option", OptionFormat.ip),
 		 82 : DHCPOptionSpec("Relay Agent Information", OptionFormat.relayAgent),
+		121 : DHCPOptionSpec("Classless Static Route Option", OptionFormat.route),
 		255 : DHCPOptionSpec("End Option", OptionFormat.none),
 	];
 }
@@ -386,6 +388,12 @@ ubyte[] serializePacket(DHCPPacket packet)
 }
 
 string ip(uint addr) { return "%(%d.%)".format(cast(ubyte[])((&addr)[0..1])); }
+string route(ulong routeinfo) {
+	ubyte[] bytes = cast(ubyte[])((&routeinfo)[0..7]);
+	return "%d.%d.%d.%d/%d -> %s".format(bytes[1], bytes[2], bytes[3], 0, bytes[0], 
+        map!ip(cast(uint[])bytes[4..8]).front
+    );
+	 }
 string ntime(uint n) { return "%d (%s)".format(n.ntohl, n.ntohl.seconds); }
 string maybeAscii(in ubyte[] bytes)
 {
@@ -570,6 +578,10 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 				enforce(bytes.length % 4 == 0, "Bad IP bytes length");
 				f.writefln("%-(%s, %)", map!ip(cast(uint[])bytes));
 				break;
+			case OptionFormat.route:
+				enforce(bytes.length % 8 == 0, "Bad route bytes length");
+				f.writefln("%-(%s, %)", map!route(cast(ulong[])bytes));
+				break;
 			case OptionFormat.boolean:
 				f.writefln("%-(%s, %)", cast(bool[])bytes);
 				break;
@@ -636,6 +648,7 @@ void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
 			f.flush();
 			break;
 		case OptionFormat.ip:
+		case OptionFormat.route:
 		case OptionFormat.boolean:
 		case OptionFormat.u8:
 		case OptionFormat.u16:
@@ -766,6 +779,8 @@ DHCPPacket generatePacket(ubyte[] mac)
 					.map!(to!ubyte)
 					.array();
 				enforce(bytes.length % 4 == 0, "Malformed IP address");
+				break;
+			case OptionFormat.route: // todo Not sure if we need to make this
 				break;
 			case OptionFormat.hex:
 				static ubyte fromHex(string os) { auto s = os; ubyte b = s.parse!ubyte(16); enforce(!s.length, "Invalid hex string: " ~ os); return b; }
