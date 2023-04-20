@@ -388,9 +388,6 @@ ubyte[] serializePacket(DHCPPacket packet)
 	return data;
 }
 
-enum bitsPerByte = 8;
-
-string ip(uint addr) { return "%(%d.%)".format(cast(ubyte[])((&addr)[0..1])); }
 string[] classlessStaticRoute(in ubyte[] bytes)
 {
 	string[] result;
@@ -403,7 +400,7 @@ string[] classlessStaticRoute(in ubyte[] bytes)
 			enforce(maskBits <= 32, "Too many bits in mask length");
 
 			ubyte[4] subnet = 0;
-			ubyte subnetSignificantBytes = maskBits + 7 / 8;
+			ubyte subnetSignificantBytes = (maskBits + 7) / 8;
 			enforce(i + subnetSignificantBytes <= bytes.length, "Not enough bytes for route subnet");
 			subnet[0 .. subnetSignificantBytes] = bytes[i .. i + subnetSignificantBytes];
 			i += subnetSignificantBytes;
@@ -423,6 +420,13 @@ string[] classlessStaticRoute(in ubyte[] bytes)
 	}
 	return result;
 }
+
+unittest
+{
+	assert(classlessStaticRoute([0x18, 0xc0, 0xa8, 0x02, 0xc0, 0xa8, 0x01, 0x32]) == ["192.168.2.0/24 -> 192.168.1.50"]);
+}
+
+string ip(uint addr) { return "%(%d.%)".format(cast(ubyte[])((&addr)[0..1])); }
 string ntime(uint n) { return "%d (%s)".format(n.ntohl, n.ntohl.seconds); }
 string maybeAscii(in ubyte[] bytes)
 {
