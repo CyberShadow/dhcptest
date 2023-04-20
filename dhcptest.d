@@ -28,6 +28,7 @@ import std.stdio;
 import std.string;
 import std.socket;
 import std.traits;
+import std.math.rounding;
 
 version (Windows)
 	static if (__VERSION__ >= 2067)
@@ -388,12 +389,42 @@ ubyte[] serializePacket(DHCPPacket packet)
 }
 
 string ip(uint addr) { return "%(%d.%)".format(cast(ubyte[])((&addr)[0..1])); }
-string route(ulong routeinfo) {
-	ubyte[] bytes = cast(ubyte[])((&routeinfo)[0..7]);
-	return "%d.%d.%d.%d/%d -> %s".format(bytes[1], bytes[2], bytes[3], 0, bytes[0], 
-        map!ip(cast(uint[])bytes[4..8]).front
-    );
-	 }
+string[] route(in ubyte[] bytes) {
+    string[] result;
+    size_t i = 0;
+    while (i < bytes.length) {
+        ubyte numBytes = cast(ubyte)ceil(0.125 * bytes[i]); // 0.125 = number of bytes in a bit
+        i++;
+        string routeinfo;
+        switch (numBytes) {
+            case 0:
+                routeinfo = "0.0.0.0/0";
+                break;
+            case 1:
+                routeinfo = "%d.0.0.0/%d".format(bytes[i], bytes[0]);
+                i += 1;
+                break;
+            case 2:
+                routeinfo = "%d.%d.0.0/%d".format(bytes[i], bytes[i+1], bytes[0]);
+                i += 2;
+                break;
+            case 3:
+                routeinfo = "%d.%d.%d.0/%d".format(bytes[i], bytes[i+1], bytes[i+2], bytes[0]);
+                i += 3;
+                break;
+            case 4:
+                routeinfo = "%d.%d.%d.%d/%d".format(bytes[i], bytes[i+1], bytes[i+2], bytes[i+3], bytes[0]);
+                i += 4;
+                break;
+            default:
+                throw new Exception("Invalid number of bytes: " ~ to!string(numBytes));
+        }
+        string routerIp = "%d.%d.%d.%d".format(bytes[i], bytes[i+1], bytes[i+2], bytes[i+3]);
+        i += 4;
+        result ~= routeinfo ~ " -> " ~ routerIp;
+    }
+    return result;
+}	 
 string ntime(uint n) { return "%d (%s)".format(n.ntohl, n.ntohl.seconds); }
 string maybeAscii(in ubyte[] bytes)
 {
@@ -579,8 +610,7 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 				f.writefln("%-(%s, %)", map!ip(cast(uint[])bytes));
 				break;
 			case OptionFormat.route:
-				enforce(bytes.length % 8 == 0, "Bad route bytes length");
-				f.writefln("%-(%s, %)", map!route(cast(ulong[])bytes));
+				f.writefln("%-(%s, %)", route(bytes));
 				break;
 			case OptionFormat.boolean:
 				f.writefln("%-(%s, %)", cast(bool[])bytes);
