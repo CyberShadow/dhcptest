@@ -22,13 +22,13 @@ import std.datetime;
 import std.exception;
 import std.format;
 import std.getopt;
+import std.math : ceil;
 import std.random;
 import std.range;
+import std.socket;
 import std.stdio;
 import std.string;
-import std.socket;
 import std.traits;
-import std.math.rounding;
 
 version (Windows)
 	static if (__VERSION__ >= 2067)
@@ -240,7 +240,7 @@ enum OptionFormat
 	netbiosNodeType,
 	relayAgent, // RFC 3046
 	vendorSpecificInformation,
-	route
+	classlessStaticRoute, // RFC 3442
 }
 
 struct DHCPOptionSpec
@@ -330,7 +330,7 @@ static this()
 		 75 : DHCPOptionSpec("StreetTalk Server Option", OptionFormat.ip),
 		 76 : DHCPOptionSpec("StreetTalk Directory Assistance (STDA) Server Option", OptionFormat.ip),
 		 82 : DHCPOptionSpec("Relay Agent Information", OptionFormat.relayAgent),
-		121 : DHCPOptionSpec("Classless Static Route Option", OptionFormat.route),
+		121 : DHCPOptionSpec("Classless Static Route Option", OptionFormat.classlessStaticRoute),
 		255 : DHCPOptionSpec("End Option", OptionFormat.none),
 	];
 }
@@ -388,40 +388,38 @@ ubyte[] serializePacket(DHCPPacket packet)
 	return data;
 }
 
+enum bitsPerByte = 8;
+
 string ip(uint addr) { return "%(%d.%)".format(cast(ubyte[])((&addr)[0..1])); }
-string[] route(in ubyte[] bytes) {
+string[] classlessStaticRoute(in ubyte[] bytes)
+{
 	string[] result;
 	size_t i = 0;
-	while (i < bytes.length) {
-		ubyte numBytes = cast(ubyte)ceil(0.125 * bytes[i]); // 0.125 = number of bytes in a bit
-		i++;
-		string routeinfo;
-		switch (numBytes) {
-			case 0:
-				routeinfo = "0.0.0.0/0";
-				break;
-			case 1:
-				routeinfo = "%d.0.0.0/%d".format(bytes[i], bytes[0]);
-				i += 1;
-				break;
-			case 2:
-				routeinfo = "%d.%d.0.0/%d".format(bytes[i], bytes[i+1], bytes[0]);
-				i += 2;
-				break;
-			case 3:
-				routeinfo = "%d.%d.%d.0/%d".format(bytes[i], bytes[i+1], bytes[i+2], bytes[0]);
-				i += 3;
-				break;
-			case 4:
-				routeinfo = "%d.%d.%d.%d/%d".format(bytes[i], bytes[i+1], bytes[i+2], bytes[i+3], bytes[0]);
-				i += 4;
-				break;
-			default:
-				throw new Exception("Invalid number of bytes: " ~ to!string(numBytes));
+	while (i < bytes.length)
+	{
+		try
+		{
+			ubyte maskBits = bytes[i++];
+			enforce(maskBits <= 32, "Too many bits in mask length");
+
+			ubyte[4] subnet = 0;
+			ubyte subnetSignificantBytes = maskBits + 7 / 8;
+			enforce(i + subnetSignificantBytes <= bytes.length, "Not enough bytes for route subnet");
+			subnet[0 .. subnetSignificantBytes] = bytes[i .. i + subnetSignificantBytes];
+			i += subnetSignificantBytes;
+
+			ubyte[4] routerIP;
+			enforce(i + 4 <= bytes.length, "Not enough bytes for router IP");
+			routerIP[] = bytes[i .. i + 4];
+			i += 4;
+
+			result ~= format!"%(%d.%)/%d -> %(%d.%)"(subnet[], maskBits, routerIP);
 		}
-		string routerIp = "%d.%d.%d.%d".format(bytes[i], bytes[i+1], bytes[i+2], bytes[i+3]);
-		i += 4;
-		result ~= routeinfo ~ " -> " ~ routerIp;
+		catch (Exception e)
+		{
+			result ~= format!"(Error: %s) %(%02x %)"(e.msg, bytes);
+			break;
+		}
 	}
 	return result;
 }
@@ -609,8 +607,8 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 				enforce(bytes.length % 4 == 0, "Bad IP bytes length");
 				f.writefln("%-(%s, %)", map!ip(cast(uint[])bytes));
 				break;
-			case OptionFormat.route:
-				f.writefln("%-(%s, %)", route(bytes));
+			case OptionFormat.classlessStaticRoute:
+				f.writefln("%-(%s, %)", classlessStaticRoute(bytes));
 				break;
 			case OptionFormat.boolean:
 				f.writefln("%-(%s, %)", cast(bool[])bytes);
@@ -678,7 +676,6 @@ void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
 			f.flush();
 			break;
 		case OptionFormat.ip:
-		case OptionFormat.route:
 		case OptionFormat.boolean:
 		case OptionFormat.u8:
 		case OptionFormat.u16:
@@ -686,6 +683,7 @@ void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
 		case OptionFormat.dhcpMessageType:
 		case OptionFormat.dhcpOptionType:
 		case OptionFormat.netbiosNodeType:
+		case OptionFormat.classlessStaticRoute:
 			return printOption(f, bytes, fmt);
 		case OptionFormat.time:
 			return printOption(f, bytes, OptionFormat.u32);
@@ -810,8 +808,6 @@ DHCPPacket generatePacket(ubyte[] mac)
 					.array();
 				enforce(bytes.length % 4 == 0, "Malformed IP address");
 				break;
-			case OptionFormat.route: // todo Not sure if we need to make this
-				break;
 			case OptionFormat.hex:
 				static ubyte fromHex(string os) { auto s = os; ubyte b = s.parse!ubyte(16); enforce(!s.length, "Invalid hex string: " ~ os); return b; }
 				bytes = value
@@ -888,8 +884,8 @@ DHCPPacket generatePacket(ubyte[] mac)
 			case OptionFormat.vendorSpecificInformation:
 				bytes = VendorSpecificInformation(value).toBytes().dup;
 				break;
-			// default:
-			// 	throw new Exception(format("Sorry, the format %s is unsupported for parsing. Please specify another format explicitly.", fmt));
+			case OptionFormat.classlessStaticRoute:
+				throw new Exception(format("Sorry, the format %s is unsupported for parsing. Please specify another format explicitly.", fmt));
 		}
 		packet.options ~= DHCPOption(opt, bytes);
 	}
