@@ -243,7 +243,7 @@ enum OptionFormat
 	vendorSpecificInformation,
 	classlessStaticRoute, // RFC 3442
 	clientIdentifier,
-	zerolength, // RFC 4039
+	zeroLength,
 }
 
 struct DHCPOptionSpec
@@ -332,7 +332,7 @@ static this()
 		 74 : DHCPOptionSpec("Default Internet Relay Chat (IRC) Server Option", OptionFormat.ip),
 		 75 : DHCPOptionSpec("StreetTalk Server Option", OptionFormat.ip),
 		 76 : DHCPOptionSpec("StreetTalk Directory Assistance (STDA) Server Option", OptionFormat.ip),
-		 80 : DHCPOptionSpec("Rapid Commit", OptionFormat.zerolength),
+		 80 : DHCPOptionSpec("Rapid Commit", OptionFormat.zeroLength),
 		 82 : DHCPOptionSpec("Relay Agent Information", OptionFormat.relayAgent),
 		100 : DHCPOptionSpec("PCode", OptionFormat.str),
 		101 : DHCPOptionSpec("TCode", OptionFormat.str),
@@ -676,9 +676,9 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 				enforce(bytes.length >= 1, "No type");
 				f.writefln("type=%d, clientIdentifier=%s", bytes[0], maybeAscii(bytes[1..$]));
 				break;
-			case OptionFormat.zerolength:
-				enforce(bytes.length==0, "Malformed Rapid Commit");
-				f.writeln();
+			case OptionFormat.zeroLength:
+				enforce(bytes.length==0, "Expected zero length");
+				f.writeln("present");
 				break;
 		}
 	catch (Exception e)
@@ -698,6 +698,7 @@ void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
 		case OptionFormat.relayAgent:
 		case OptionFormat.vendorSpecificInformation:
 		case OptionFormat.clientIdentifier:
+		case OptionFormat.zeroLength:
 			f.writefln("%-(%02X%)", bytes);
 			break;
 		case OptionFormat.str:
@@ -716,7 +717,6 @@ void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
 			return printOption(f, bytes, fmt);
 		case OptionFormat.time:
 			return printOption(f, bytes, OptionFormat.u32);
-		case OptionFormat.zerolength:
 	}
 }
 
@@ -919,7 +919,8 @@ DHCPPacket generatePacket(ubyte[] mac)
 			case OptionFormat.classlessStaticRoute:
 			case OptionFormat.clientIdentifier:
 				throw new Exception(format("Sorry, the format %s is unsupported for parsing. Please specify another format explicitly.", fmt));
-			case OptionFormat.zerolength:
+			case OptionFormat.zeroLength:
+				enforce(value == "present", "Value for empty options must be \"present\"");
 				break;
 		}
 		packet.options ~= DHCPOption(opt, bytes);
