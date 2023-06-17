@@ -224,7 +224,8 @@ enum NETBIOSNodeTypeChars = "BPMH";
 /// How option values are displayed and interpreted
 enum OptionFormat
 {
-	none,
+	special,
+	unknown,
 	str,
 	ip,
 	IP = ip, // for backwards compatibility
@@ -241,6 +242,8 @@ enum OptionFormat
 	relayAgent, // RFC 3046
 	vendorSpecificInformation,
 	classlessStaticRoute, // RFC 3442
+	clientIdentifier,
+	zeroLength,
 }
 
 struct DHCPOptionSpec
@@ -254,7 +257,7 @@ static this()
 {
 	dhcpOptions =
 	[
-		  0 : DHCPOptionSpec("Pad Option", OptionFormat.none),
+		  0 : DHCPOptionSpec("Pad Option", OptionFormat.special),
 		  1 : DHCPOptionSpec("Subnet Mask", OptionFormat.ip),
 		  2 : DHCPOptionSpec("Time Offset", OptionFormat.time),
 		  3 : DHCPOptionSpec("Router Option", OptionFormat.ip),
@@ -304,18 +307,18 @@ static this()
 		 47 : DHCPOptionSpec("NetBIOS over TCP/IP Scope Option", OptionFormat.str),
 		 48 : DHCPOptionSpec("X Window System Font Server Option", OptionFormat.ip),
 		 49 : DHCPOptionSpec("X Window System Display Manager Option", OptionFormat.ip),
-		 50 : DHCPOptionSpec("Requested IP Address", OptionFormat.none),
+		 50 : DHCPOptionSpec("Requested IP Address", OptionFormat.ip),
 		 51 : DHCPOptionSpec("IP Address Lease Time", OptionFormat.time),
-		 52 : DHCPOptionSpec("Option Overload", OptionFormat.none),
+		 52 : DHCPOptionSpec("Option Overload", OptionFormat.clientIdentifier),
 		 53 : DHCPOptionSpec("DHCP Message Type", OptionFormat.dhcpMessageType),
 		 54 : DHCPOptionSpec("Server Identifier", OptionFormat.ip),
 		 55 : DHCPOptionSpec("Parameter Request List", OptionFormat.dhcpOptionType),
-		 56 : DHCPOptionSpec("Message", OptionFormat.none),
-		 57 : DHCPOptionSpec("Maximum DHCP Message Size", OptionFormat.none),
+		 56 : DHCPOptionSpec("Message", OptionFormat.str),
+		 57 : DHCPOptionSpec("Maximum DHCP Message Size", OptionFormat.u16),
 		 58 : DHCPOptionSpec("Renewal (T1) Time Value", OptionFormat.time),
 		 59 : DHCPOptionSpec("Rebinding (T2) Time Value", OptionFormat.time),
 		 60 : DHCPOptionSpec("Vendor class identifier", OptionFormat.str),
-		 61 : DHCPOptionSpec("Client-identifier", OptionFormat.none),
+		 61 : DHCPOptionSpec("Client-identifier", OptionFormat.u8),
 		 64 : DHCPOptionSpec("Network Information Service+ Domain Option", OptionFormat.str),
 		 65 : DHCPOptionSpec("Network Information Service+ Servers Option", OptionFormat.ip),
 		 66 : DHCPOptionSpec("TFTP server name", OptionFormat.str),
@@ -329,9 +332,18 @@ static this()
 		 74 : DHCPOptionSpec("Default Internet Relay Chat (IRC) Server Option", OptionFormat.ip),
 		 75 : DHCPOptionSpec("StreetTalk Server Option", OptionFormat.ip),
 		 76 : DHCPOptionSpec("StreetTalk Directory Assistance (STDA) Server Option", OptionFormat.ip),
+		 80 : DHCPOptionSpec("Rapid Commit", OptionFormat.zeroLength),
 		 82 : DHCPOptionSpec("Relay Agent Information", OptionFormat.relayAgent),
+		100 : DHCPOptionSpec("PCode", OptionFormat.str),
+		101 : DHCPOptionSpec("TCode", OptionFormat.str),
+		108 : DHCPOptionSpec("IPv6-Only Preferred", OptionFormat.u32),
+		114 : DHCPOptionSpec("DHCP Captive-Portal", OptionFormat.str),
+		116 : DHCPOptionSpec("Auto Config", OptionFormat.boolean),
+		118 : DHCPOptionSpec("Subnet Selection", OptionFormat.ip),
 		121 : DHCPOptionSpec("Classless Static Route Option", OptionFormat.classlessStaticRoute),
-		255 : DHCPOptionSpec("End Option", OptionFormat.none),
+		249 : DHCPOptionSpec("Microsoft Classless Static Route", OptionFormat.classlessStaticRoute),
+		252 : DHCPOptionSpec("Web Proxy Auto-Discovery", OptionFormat.str),
+		255 : DHCPOptionSpec("End Option", OptionFormat.special),
 	];
 }
 
@@ -465,13 +477,13 @@ struct VLList(Type)
 			if (s[0].isDigit)
 			{
 				ubyte typeByte;
-				enforce(s.formattedRead!"%s"(&typeByte) == 1, "Expected relay agent sub-option type");
+				enforce(s.formattedRead!"%s"(&typeByte) == 1, "Expected sub-option type");
 				type = cast(Type)typeByte;
 			}
 			else
-				enforce(s.formattedRead!"%s"(&type) == 1, "Expected relay agent sub-option type");
+				enforce(s.formattedRead!"%s"(&type) == 1, "Expected sub-option type");
 
-			enforce(s.skipOver("="), "Expected = in relay agent sub-option");
+			enforce(s.skipOver("="), "Expected = in sub-option");
 			value = s.parseElement!(char[])();
 		}
 
@@ -600,7 +612,9 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 	try
 		final switch (fmt)
 		{
-			case OptionFormat.none:
+			case OptionFormat.special:
+				assert(false);
+			case OptionFormat.unknown:
 			case OptionFormat.hex:
 				f.writeln(maybeAscii(bytes));
 				break;
@@ -658,6 +672,14 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 			case OptionFormat.relayAgent:
 				f.writeln((const RelayAgentInformation(bytes)).toString());
 				break;
+			case OptionFormat.clientIdentifier:
+				enforce(bytes.length >= 1, "No type");
+				f.writefln("type=%d, clientIdentifier=%s", bytes[0], maybeAscii(bytes[1..$]));
+				break;
+			case OptionFormat.zeroLength:
+				enforce(bytes.length==0, "Expected zero length");
+				f.writeln("present");
+				break;
 		}
 	catch (Exception e)
 		f.writefln("Decode error (%s). Raw bytes: %s",
@@ -669,10 +691,14 @@ void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
 {
 	final switch (fmt)
 	{
-		case OptionFormat.none:
+		case OptionFormat.special:
+			assert(false);
+		case OptionFormat.unknown:
 		case OptionFormat.hex:
 		case OptionFormat.relayAgent:
 		case OptionFormat.vendorSpecificInformation:
+		case OptionFormat.clientIdentifier:
+		case OptionFormat.zeroLength:
 			f.writefln("%-(%02X%)", bytes);
 			break;
 		case OptionFormat.str:
@@ -708,8 +734,8 @@ void printPacket(File f, DHCPPacket packet)
 		}
 		auto opt = parseDHCPOptionType(numStr);
 
-		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.none;
-		if (fmt == OptionFormat.none)
+		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.unknown;
+		if (fmt == OptionFormat.unknown)
 			fmt = dhcpOptions.get(opt, DHCPOptionSpec.init).format;
 
 		foreach (option; packet.options)
@@ -793,12 +819,14 @@ DHCPPacket generatePacket(ubyte[] mac)
 		}
 		auto opt = parseDHCPOptionType(numStr);
 		ubyte[] bytes;
-		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.none;
-		if (fmt == OptionFormat.none)
+		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.unknown;
+		if (fmt == OptionFormat.unknown)
 			fmt = dhcpOptions.get(opt, DHCPOptionSpec.init).format;
 		final switch (fmt)
 		{
-			case OptionFormat.none:
+			case OptionFormat.special:
+				throw new Exception(format("Can't specify a value for special option %d.", opt));
+			case OptionFormat.unknown:
 				throw new Exception(format("Don't know how to interpret given value for option %d, please specify a format explicitly.", opt));
 			case OptionFormat.str:
 				bytes = cast(ubyte[])value;
@@ -889,7 +917,11 @@ DHCPPacket generatePacket(ubyte[] mac)
 				bytes = VendorSpecificInformation(value).toBytes().dup;
 				break;
 			case OptionFormat.classlessStaticRoute:
+			case OptionFormat.clientIdentifier:
 				throw new Exception(format("Sorry, the format %s is unsupported for parsing. Please specify another format explicitly.", fmt));
+			case OptionFormat.zeroLength:
+				enforce(value == "present", "Value for empty options must be \"present\"");
+				break;
 		}
 		packet.options ~= DHCPOption(opt, bytes);
 	}
