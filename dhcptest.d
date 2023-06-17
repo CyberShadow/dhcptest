@@ -241,6 +241,7 @@ enum OptionFormat
 	relayAgent, // RFC 3046
 	vendorSpecificInformation,
 	classlessStaticRoute, // RFC 3442
+	zerolength, // RFC 4039
 }
 
 struct DHCPOptionSpec
@@ -329,8 +330,17 @@ static this()
 		 74 : DHCPOptionSpec("Default Internet Relay Chat (IRC) Server Option", OptionFormat.ip),
 		 75 : DHCPOptionSpec("StreetTalk Server Option", OptionFormat.ip),
 		 76 : DHCPOptionSpec("StreetTalk Directory Assistance (STDA) Server Option", OptionFormat.ip),
+		 80 : DHCPOptionSpec("Rapid Commit", OptionFormat.zerolength),
 		 82 : DHCPOptionSpec("Relay Agent Information", OptionFormat.relayAgent),
+		100 : DHCPOptionSpec("PCode", OptionFormat.str),
+		101 : DHCPOptionSpec("TCode", OptionFormat.str),
+		108 : DHCPOptionSpec("IPv6-Only Preferred", OptionFormat.u32),
+		114 : DHCPOptionSpec("DHCP Captive-Portal", OptionFormat.str),
+		116 : DHCPOptionSpec("Auto Config", OptionFormat.boolean),
+		118 : DHCPOptionSpec("Subnet Selection", OptionFormat.ip),
 		121 : DHCPOptionSpec("Classless Static Route Option", OptionFormat.classlessStaticRoute),
+		249 : DHCPOptionSpec("Microsoft Classless Static Route", OptionFormat.classlessStaticRoute),
+		252 : DHCPOptionSpec("Web Proxy Auto-Discovery", OptionFormat.str),
 		255 : DHCPOptionSpec("End Option", OptionFormat.none),
 	];
 }
@@ -658,6 +668,10 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 			case OptionFormat.relayAgent:
 				f.writeln((const RelayAgentInformation(bytes)).toString());
 				break;
+			case OptionFormat.zerolength:
+				enforce(bytes.length==0, "Malformed Rapid Commit");
+				f.writeln();
+				break;
 		}
 	catch (Exception e)
 		f.writefln("Decode error (%s). Raw bytes: %s",
@@ -691,6 +705,7 @@ void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
 			return printOption(f, bytes, fmt);
 		case OptionFormat.time:
 			return printOption(f, bytes, OptionFormat.u32);
+		case OptionFormat.zerolength:
 	}
 }
 
@@ -890,6 +905,8 @@ DHCPPacket generatePacket(ubyte[] mac)
 				break;
 			case OptionFormat.classlessStaticRoute:
 				throw new Exception(format("Sorry, the format %s is unsupported for parsing. Please specify another format explicitly.", fmt));
+			case OptionFormat.zerolength:
+				break;
 		}
 		packet.options ~= DHCPOption(opt, bytes);
 	}
