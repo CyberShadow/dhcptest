@@ -224,7 +224,8 @@ enum NETBIOSNodeTypeChars = "BPMH";
 /// How option values are displayed and interpreted
 enum OptionFormat
 {
-	none,
+	special,
+	unknown,
 	str,
 	ip,
 	IP = ip, // for backwards compatibility
@@ -256,7 +257,7 @@ static this()
 {
 	dhcpOptions =
 	[
-		  0 : DHCPOptionSpec("Pad Option", OptionFormat.none),
+		  0 : DHCPOptionSpec("Pad Option", OptionFormat.special),
 		  1 : DHCPOptionSpec("Subnet Mask", OptionFormat.ip),
 		  2 : DHCPOptionSpec("Time Offset", OptionFormat.time),
 		  3 : DHCPOptionSpec("Router Option", OptionFormat.ip),
@@ -306,18 +307,18 @@ static this()
 		 47 : DHCPOptionSpec("NetBIOS over TCP/IP Scope Option", OptionFormat.str),
 		 48 : DHCPOptionSpec("X Window System Font Server Option", OptionFormat.ip),
 		 49 : DHCPOptionSpec("X Window System Display Manager Option", OptionFormat.ip),
-		 50 : DHCPOptionSpec("Requested IP Address", OptionFormat.none),
+		 50 : DHCPOptionSpec("Requested IP Address", OptionFormat.ip),
 		 51 : DHCPOptionSpec("IP Address Lease Time", OptionFormat.time),
 		 52 : DHCPOptionSpec("Option Overload", OptionFormat.clientIdentifier),
 		 53 : DHCPOptionSpec("DHCP Message Type", OptionFormat.dhcpMessageType),
 		 54 : DHCPOptionSpec("Server Identifier", OptionFormat.ip),
 		 55 : DHCPOptionSpec("Parameter Request List", OptionFormat.dhcpOptionType),
-		 56 : DHCPOptionSpec("Message", OptionFormat.none),
-		 57 : DHCPOptionSpec("Maximum DHCP Message Size", OptionFormat.none),
+		 56 : DHCPOptionSpec("Message", OptionFormat.str),
+		 57 : DHCPOptionSpec("Maximum DHCP Message Size", OptionFormat.u16),
 		 58 : DHCPOptionSpec("Renewal (T1) Time Value", OptionFormat.time),
 		 59 : DHCPOptionSpec("Rebinding (T2) Time Value", OptionFormat.time),
 		 60 : DHCPOptionSpec("Vendor class identifier", OptionFormat.str),
-		 61 : DHCPOptionSpec("Client-identifier", OptionFormat.none),
+		 61 : DHCPOptionSpec("Client-identifier", OptionFormat.u8),
 		 64 : DHCPOptionSpec("Network Information Service+ Domain Option", OptionFormat.str),
 		 65 : DHCPOptionSpec("Network Information Service+ Servers Option", OptionFormat.ip),
 		 66 : DHCPOptionSpec("TFTP server name", OptionFormat.str),
@@ -342,7 +343,7 @@ static this()
 		121 : DHCPOptionSpec("Classless Static Route Option", OptionFormat.classlessStaticRoute),
 		249 : DHCPOptionSpec("Microsoft Classless Static Route", OptionFormat.classlessStaticRoute),
 		252 : DHCPOptionSpec("Web Proxy Auto-Discovery", OptionFormat.str),
-		255 : DHCPOptionSpec("End Option", OptionFormat.none),
+		255 : DHCPOptionSpec("End Option", OptionFormat.special),
 	];
 }
 
@@ -611,7 +612,9 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 	try
 		final switch (fmt)
 		{
-			case OptionFormat.none:
+			case OptionFormat.special:
+				assert(false);
+			case OptionFormat.unknown:
 			case OptionFormat.hex:
 				f.writeln(maybeAscii(bytes));
 				break;
@@ -688,7 +691,9 @@ void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
 {
 	final switch (fmt)
 	{
-		case OptionFormat.none:
+		case OptionFormat.special:
+			assert(false);
+		case OptionFormat.unknown:
 		case OptionFormat.hex:
 		case OptionFormat.relayAgent:
 		case OptionFormat.vendorSpecificInformation:
@@ -729,8 +734,8 @@ void printPacket(File f, DHCPPacket packet)
 		}
 		auto opt = parseDHCPOptionType(numStr);
 
-		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.none;
-		if (fmt == OptionFormat.none)
+		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.unknown;
+		if (fmt == OptionFormat.unknown)
 			fmt = dhcpOptions.get(opt, DHCPOptionSpec.init).format;
 
 		foreach (option; packet.options)
@@ -814,12 +819,14 @@ DHCPPacket generatePacket(ubyte[] mac)
 		}
 		auto opt = parseDHCPOptionType(numStr);
 		ubyte[] bytes;
-		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.none;
-		if (fmt == OptionFormat.none)
+		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.unknown;
+		if (fmt == OptionFormat.unknown)
 			fmt = dhcpOptions.get(opt, DHCPOptionSpec.init).format;
 		final switch (fmt)
 		{
-			case OptionFormat.none:
+			case OptionFormat.special:
+				throw new Exception(format("Can't specify a value for special option %d.", opt));
+			case OptionFormat.unknown:
 				throw new Exception(format("Don't know how to interpret given value for option %d, please specify a format explicitly.", opt));
 			case OptionFormat.str:
 				bytes = cast(ubyte[])value;
