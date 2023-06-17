@@ -241,6 +241,7 @@ enum OptionFormat
 	relayAgent, // RFC 3046
 	vendorSpecificInformation,
 	classlessStaticRoute, // RFC 3442
+	clientIdentifier,
 	zerolength, // RFC 4039
 }
 
@@ -307,7 +308,7 @@ static this()
 		 49 : DHCPOptionSpec("X Window System Display Manager Option", OptionFormat.ip),
 		 50 : DHCPOptionSpec("Requested IP Address", OptionFormat.none),
 		 51 : DHCPOptionSpec("IP Address Lease Time", OptionFormat.time),
-		 52 : DHCPOptionSpec("Option Overload", OptionFormat.none),
+		 52 : DHCPOptionSpec("Option Overload", OptionFormat.clientIdentifier),
 		 53 : DHCPOptionSpec("DHCP Message Type", OptionFormat.dhcpMessageType),
 		 54 : DHCPOptionSpec("Server Identifier", OptionFormat.ip),
 		 55 : DHCPOptionSpec("Parameter Request List", OptionFormat.dhcpOptionType),
@@ -668,6 +669,10 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 			case OptionFormat.relayAgent:
 				f.writeln((const RelayAgentInformation(bytes)).toString());
 				break;
+			case OptionFormat.clientIdentifier:
+				enforce(bytes.length >= 1, "No type");
+				f.writefln("type=%d, clientIdentifier=%s", bytes[0], maybeAscii(bytes[1..$]));
+				break;
 			case OptionFormat.zerolength:
 				enforce(bytes.length==0, "Malformed Rapid Commit");
 				f.writeln();
@@ -687,6 +692,7 @@ void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
 		case OptionFormat.hex:
 		case OptionFormat.relayAgent:
 		case OptionFormat.vendorSpecificInformation:
+		case OptionFormat.clientIdentifier:
 			f.writefln("%-(%02X%)", bytes);
 			break;
 		case OptionFormat.str:
@@ -904,6 +910,7 @@ DHCPPacket generatePacket(ubyte[] mac)
 				bytes = VendorSpecificInformation(value).toBytes().dup;
 				break;
 			case OptionFormat.classlessStaticRoute:
+			case OptionFormat.clientIdentifier:
 				throw new Exception(format("Sorry, the format %s is unsupported for parsing. Please specify another format explicitly.", fmt));
 			case OptionFormat.zerolength:
 				break;
