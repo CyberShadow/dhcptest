@@ -477,13 +477,13 @@ struct VLList(Type)
 			if (s[0].isDigit)
 			{
 				ubyte typeByte;
-				enforce(s.formattedRead!"%s"(&typeByte) == 1, "Expected relay agent sub-option type");
+				enforce(s.formattedRead!"%s"(&typeByte) == 1, "Expected sub-option type");
 				type = cast(Type)typeByte;
 			}
 			else
-				enforce(s.formattedRead!"%s"(&type) == 1, "Expected relay agent sub-option type");
+				enforce(s.formattedRead!"%s"(&type) == 1, "Expected sub-option type");
 
-			enforce(s.skipOver("="), "Expected = in relay agent sub-option");
+			enforce(s.skipOver("="), "Expected = in sub-option");
 			value = s.parseElement!(char[])();
 		}
 
