@@ -500,7 +500,7 @@ struct VLList(Type)
 			if (type != Type.raw)
 			{
 				result ~= type.to!ubyte;
-				result ~= (2 + value.representation.length).to!ubyte;
+				result ~= value.representation.length.to!ubyte;
 			}
 			result ~= value.representation;
 			return result;
@@ -514,10 +514,10 @@ struct VLList(Type)
 		while (bytes.length >= 2)
 		{
 			auto len = bytes[1];
-			if (len < 2 || len > bytes.length)
+			if (2 + len > bytes.length)
 				break;
-			suboptions ~= inout Suboption(cast(Type)bytes[0], cast(inout(char)[])bytes[2..len]);
-			bytes = bytes[len..$];
+			suboptions ~= inout Suboption(cast(Type)bytes[0], cast(inout(char)[])bytes[2 .. 2 + len]);
+			bytes = bytes[2 + len .. $];
 		}
 		if (bytes.length)
 			suboptions ~= inout Suboption(Type.raw, cast(inout(char)[]) bytes);
@@ -579,19 +579,19 @@ unittest
 		`raw="\0"`
 	);
 	test(
-		[0x01, 0x05, 'f', 'o', 'o'],
+		[0x01, 0x03, 'f', 'o', 'o'],
 		`agentCircuitID="foo"`
 	);
 	test(
-		[0x01, 0x05, 'f', 'o', 'o', 0x42],
+		[0x01, 0x03, 'f', 'o', 'o', 0x42],
 		`agentCircuitID="foo", raw="B"`
 	);
 	test(
-		[0x01, 0x05, 'f', 'o', 'o', 0x02, 0x05, 'b', 'a', 'r'],
+		[0x01, 0x03, 'f', 'o', 'o', 0x02, 0x03, 'b', 'a', 'r'],
 		`agentCircuitID="foo", agentRemoteID="bar"`
 	);
 	test(
-		[0x03, 0x05, 'f', 'o', 'o'],
+		[0x03, 0x03, 'f', 'o', 'o'],
 		`3="foo"`
 	);
 }
@@ -1007,7 +1007,7 @@ void sendPacket(Socket socket, Address addr, string targetIP, ubyte[] mac, DHCPP
 	}
 
 	auto sent = socket.sendTo(data, addr);
-	enforce(sent > 0, "sendto error");
+	errnoEnforce(sent > 0, "sendto error");
 	enforce(sent == data.length, "Sent only %d/%d bytes".format(sent, data.length));
 }
 
