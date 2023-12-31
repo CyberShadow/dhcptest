@@ -66,6 +66,13 @@ For a list and description of DHCP options, see [RFC 2132](https://datatracker.i
 
 ## Changelog
 
+### dhcptest v0.9 (2023-03-31)
+
+ * Add option 121 (contributed by [Andrey Baranov](https://github.com/Dronec))
+ * Add options 80, 100, 101, 108, 114, 116, 118, 249, and 252 (contributed by 
+   [Rob Gill](https://github.com/rrobgill)
+ * Fix encoding/decoding options 43 and 82
+
 ### dhcptest v0.8 (2023-03-24)
 
  * Add `--iface` option for Linux
