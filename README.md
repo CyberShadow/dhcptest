@@ -43,9 +43,9 @@ Options can also be specified by name:
 
 Query mode will report the first reply recieved. To automatically send a discover packet and wait for 
 all replies before the timeout, use `--wait`. For additional resilience against dropped packets on busy 
-networks, consider using the `--retry` and `--timeout` switches:
+networks, consider using the `--tries` and `--timeout` switches:
 
-    dhcptest --quiet --query --wait --retry 5 --timeout 10
+    dhcptest --quiet --query --wait --tries 5 --timeout 10
 
 You can spoof the Vendor Class Identifier, or send additional DHCP options with the request packet,
 using the `--option` switch:
@@ -117,7 +117,7 @@ For a list and description of DHCP options, see [RFC 2132](https://datatracker.i
 
 ### dhcptest v0.4 (2014-07-21)
 
- * Add switches: `--retry`, `--timeout`, `--option`
+ * Add switches: `--tries`, `--timeout`, `--option`
 
 ### dhcptest v0.3 (2014-04-05)
 
