@@ -224,8 +224,8 @@ enum NETBIOSNodeTypeChars = "BPMH";
 /// How option values are displayed and interpreted
 enum OptionFormat
 {
-	special,
 	unknown,
+	special,
 	str,
 	ip,
 	IP = ip, // for backwards compatibility
