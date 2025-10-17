@@ -332,6 +332,7 @@ static this()
 		 74 : DHCPOptionSpec("Default Internet Relay Chat (IRC) Server Option", OptionFormat.ip),
 		 75 : DHCPOptionSpec("StreetTalk Server Option", OptionFormat.ip),
 		 76 : DHCPOptionSpec("StreetTalk Directory Assistance (STDA) Server Option", OptionFormat.ip),
+		 77 : DHCPOptionSpec("User-Class-Identifier", OptionFormat.str),
 		 80 : DHCPOptionSpec("Rapid Commit", OptionFormat.zeroLength),
 		 82 : DHCPOptionSpec("Relay Agent Information", OptionFormat.relayAgent),
 		100 : DHCPOptionSpec("PCode", OptionFormat.str),
