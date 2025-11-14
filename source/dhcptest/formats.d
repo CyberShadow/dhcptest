@@ -7,7 +7,6 @@ import std.datetime;
 import std.exception : enforce;
 import std.format;
 import std.range;
-import std.stdio : File;
 import std.string;
 
 public import dhcptest.options;
@@ -214,8 +213,8 @@ ubyte[] parseOption(string value, OptionFormat fmt)
 	return bytes;
 }
 
-/// Print an option in a human-readable format.
-void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
+/// Format an option in a human-readable format.
+string formatOption(in ubyte[] bytes, OptionFormat fmt)
 {
 	try
 		final switch (fmt)
@@ -224,46 +223,35 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 				assert(false);
 			case OptionFormat.unknown:
 			case OptionFormat.hex:
-				f.writeln(maybeAscii(bytes));
-				break;
+				return maybeAscii(bytes);
 			case OptionFormat.str:
-				f.writeln(cast(string)bytes);
-				break;
+				return cast(string)bytes;
 			case OptionFormat.ip:
 				enforce(bytes.length % 4 == 0, "Bad IP bytes length");
-				f.writefln("%-(%s, %)", map!ip(cast(uint[])bytes));
-				break;
+				return format("%-(%s, %)", map!ip(cast(uint[])bytes));
 			case OptionFormat.classlessStaticRoute:
-				f.writefln("%-(%s, %)", classlessStaticRoute(bytes));
-				break;
+				return format("%-(%s, %)", classlessStaticRoute(bytes));
 			case OptionFormat.boolean:
-				f.writefln("%-(%s, %)", cast(bool[])bytes);
-				break;
+				return format("%-(%s, %)", cast(bool[])bytes);
 			case OptionFormat.u8:
-				f.writefln("%-(%s, %)", bytes);
-				break;
+				return format("%-(%s, %)", bytes);
 			case OptionFormat.u16:
 				enforce(bytes.length % 2 == 0, "Bad u16 bytes length");
-				f.writefln("%-(%s, %)", (cast(ushort[])bytes).map!ntohs);
-				break;
+				return format("%-(%s, %)", (cast(ushort[])bytes).map!ntohs);
 			case OptionFormat.u32:
 				enforce(bytes.length % 4 == 0, "Bad u32 bytes length");
-				f.writefln("%-(%s, %)", (cast(uint[])bytes).map!ntohl);
-				break;
+				return format("%-(%s, %)", (cast(uint[])bytes).map!ntohl);
 			case OptionFormat.time:
 				enforce(bytes.length % 4 == 0, "Bad time bytes length");
-				f.writefln("%-(%s, %)", map!ntime(cast(uint[])bytes));
-				break;
+				return format("%-(%s, %)", map!ntime(cast(uint[])bytes));
 			case OptionFormat.dhcpMessageType:
 				enforce(bytes.length==1, "Bad dhcpMessageType data length");
-				f.writeln(cast(DHCPMessageType)bytes[0]);
-				break;
+				return (cast(DHCPMessageType)bytes[0]).to!string;
 			case OptionFormat.dhcpOptionType:
-				f.writefln("%-(%s, %)", map!formatDHCPOptionType(cast(DHCPOptionType[])bytes));
-				break;
+				return format("%-(%s, %)", map!formatDHCPOptionType(cast(DHCPOptionType[])bytes));
 			case OptionFormat.netbiosNodeType:
 				enforce(bytes.length==1, "Bad netbiosNodeType data length");
-				f.writefln("%-(%s, %)", bytes
+				return format("%-(%s, %)", bytes
 					.map!(b =>
 						NETBIOSNodeTypeChars
 						.length
@@ -273,29 +261,24 @@ void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 						.array
 					)
 				);
-				break;
 			case OptionFormat.vendorSpecificInformation:
-				f.writeln((const VendorSpecificInformation(bytes)).toString());
-				break;
+				return (const VendorSpecificInformation(bytes)).toString();
 			case OptionFormat.relayAgent:
-				f.writeln((const RelayAgentInformation(bytes)).toString());
-				break;
+				return (const RelayAgentInformation(bytes)).toString();
 			case OptionFormat.clientIdentifier:
 				enforce(bytes.length >= 1, "No type");
-				f.writefln("type=%d, clientIdentifier=%s", bytes[0], maybeAscii(bytes[1..$]));
-				break;
+				return format("type=%d, clientIdentifier=%s", bytes[0], maybeAscii(bytes[1..$]));
 			case OptionFormat.zeroLength:
 				enforce(bytes.length==0, "Expected zero length");
-				f.writeln("present");
-				break;
+				return "present";
 		}
 	catch (Exception e)
-		f.writefln("Decode error (%s). Raw bytes: %s",
+		return format("Decode error (%s). Raw bytes: %s",
 			e.msg, maybeAscii(bytes));
 }
 
-/// Print an option in machine-readable format.
-void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
+/// Format an option in machine-readable format.
+string formatRawOption(in ubyte[] bytes, OptionFormat fmt)
 {
 	final switch (fmt)
 	{
@@ -307,12 +290,9 @@ void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
 		case OptionFormat.vendorSpecificInformation:
 		case OptionFormat.clientIdentifier:
 		case OptionFormat.zeroLength:
-			f.writefln("%-(%02X%)", bytes);
-			break;
+			return format("%-(%02X%)", bytes);
 		case OptionFormat.str:
-			f.write(cast(char[])bytes);
-			f.flush();
-			break;
+			return cast(string)bytes;
 		case OptionFormat.ip:
 		case OptionFormat.boolean:
 		case OptionFormat.u8:
@@ -322,9 +302,9 @@ void printRawOption(File f, in ubyte[] bytes, OptionFormat fmt)
 		case OptionFormat.dhcpOptionType:
 		case OptionFormat.netbiosNodeType:
 		case OptionFormat.classlessStaticRoute:
-			return printOption(f, bytes, fmt);
+			return formatOption(bytes, fmt);
 		case OptionFormat.time:
-			return printOption(f, bytes, OptionFormat.u32);
+			return formatOption(bytes, OptionFormat.u32);
 	}
 }
 

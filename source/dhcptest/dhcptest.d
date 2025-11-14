@@ -77,7 +77,8 @@ version (linux)
 __gshared string printOnly;
 __gshared bool quiet;
 
-void printPacket(File f, DHCPPacket packet)
+/// Format a DHCP packet as a string
+string formatPacket(DHCPPacket packet)
 {
 	if (printOnly != "")
 	{
@@ -99,17 +100,16 @@ void printPacket(File f, DHCPPacket packet)
 		{
 			if (option.type == opt)
 			{
-				printRawOption(f, option.data, fmt);
-				return;
+				return formatRawOption(option.data, fmt);
 			}
 		}
 		if (!quiet) stderr.writefln("(No option %s in packet)", opt);
-		return;
+		return "";
 	}
 
-
+	auto output = appender!string();
 	auto opNames = [1:"BOOTREQUEST",2:"BOOTREPLY"];
-	f.writefln("  op=%s chaddr=%(%02X:%) hops=%d xid=%08X secs=%d flags=%04X\n  ciaddr=%s yiaddr=%s siaddr=%s giaddr=%s sname=%s file=%s",
+	output.formattedWrite!"  op=%s chaddr=%(%02X:%) hops=%d xid=%08X secs=%d flags=%04X\n  ciaddr=%s yiaddr=%s siaddr=%s giaddr=%s sname=%s file=%s\n"(
 		opNames.get(packet.header.op, text(packet.header.op)),
 		packet.header.chaddr[0..packet.header.hlen],
 		packet.header.hops,
@@ -124,15 +124,23 @@ void printPacket(File f, DHCPPacket packet)
 		to!string(packet.header.file.ptr),
 	);
 
-	f.writefln("  %d options:", packet.options.length);
+	output.formattedWrite!"  %d options:\n"(packet.options.length);
 	foreach (option; packet.options)
 	{
 		auto type = cast(DHCPOptionType)option.type;
-		f.writef("    %s: ", formatDHCPOptionType(type));
-		auto format = dhcpOptions.get(type, DHCPOptionSpec.init).format;
-		printOption(f, option.data, format);
+		output.formattedWrite!"    %s: "(formatDHCPOptionType(type));
+		auto fmt = dhcpOptions.get(type, DHCPOptionSpec.init).format;
+		output.put(formatOption(option.data, fmt));
+		output.put("\n");
 	}
 
+	return output.data;
+}
+
+/// Print a DHCP packet to a file
+void printPacket(File f, DHCPPacket packet)
+{
+	f.write(formatPacket(packet));
 	f.flush();
 }
 
