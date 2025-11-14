@@ -96,6 +96,124 @@ unittest
 	assert(classlessStaticRoute([0x18, 0xc0, 0xa8, 0x02, 0xc0, 0xa8, 0x01, 0x32]) == ["192.168.2.0/24 -> 192.168.1.50"]);
 }
 
+/// Parse a string value into bytes according to the specified format.
+ubyte[] parseOption(string value, OptionFormat fmt)
+{
+	import std.algorithm : fold;
+	import std.ascii : isDigit;
+
+	ubyte[] bytes;
+
+	final switch (fmt)
+	{
+		case OptionFormat.special:
+			throw new Exception("Can't specify a value for special option.");
+		case OptionFormat.unknown:
+			throw new Exception("Don't know how to interpret given value, please specify a format explicitly.");
+		case OptionFormat.str:
+			bytes = cast(ubyte[])value;
+			break;
+		case OptionFormat.ip:
+			bytes = value
+				.replace(" ", ".")
+				.replace(",", ".")
+				.splitter(".")
+				.map!(to!ubyte)
+				.array();
+			enforce(bytes.length % 4 == 0, "Malformed IP address");
+			break;
+		case OptionFormat.hex:
+			static ubyte fromHex(string os) { auto s = os; ubyte b = s.parse!ubyte(16); enforce(!s.length, "Invalid hex string: " ~ os); return b; }
+			bytes = value
+				.replace(" ", "")
+				.replace(":", "")
+				.chunks(2)
+				.map!(chunk => fromHex(to!string(chunk)))
+				.array();
+			break;
+		case OptionFormat.boolean:
+			bytes = value
+				.splitter(",")
+				.map!strip
+				.map!(to!bool)
+				.map!(b => ubyte(b))
+				.array();
+			break;
+		case OptionFormat.u8:
+			bytes = value
+				.splitter(",")
+				.map!strip
+				.map!(to!ubyte)
+				.array();
+			break;
+		case OptionFormat.u16:
+			bytes = value
+				.splitter(",")
+				.map!strip
+				.map!(to!ushort)
+				.map!htons
+				.map!((ushort i) { ushort[] a = [i]; ubyte[] b = cast(ubyte[])a; return b; })
+				.join();
+			break;
+		case OptionFormat.u32:
+		case OptionFormat.time:
+			bytes = value
+				.splitter(",")
+				.map!strip
+				.map!(to!int)
+				.map!htonl
+				.map!((int i) { int[] a = [i]; ubyte[] b = cast(ubyte[])a; return b; })
+				.join();
+			break;
+		case OptionFormat.dhcpMessageType:
+			import dhcptest.options : DHCPMessageType;
+			bytes = value
+				.splitter(",")
+				.map!strip
+				.map!(to!DHCPMessageType)
+				.map!((ubyte i) => [i])
+				.join();
+			break;
+		case OptionFormat.dhcpOptionType:
+			import dhcptest.options : parseDHCPOptionType;
+			bytes = value
+				.splitter(",")
+				.map!strip
+				.map!parseDHCPOptionType
+				.map!((ubyte i) => [i])
+				.join();
+			break;
+		case OptionFormat.netbiosNodeType:
+			import dhcptest.options : NETBIOSNodeTypeChars;
+			bytes = value
+				.splitter(",")
+				.map!strip
+				.map!(s => s
+					.map!(c => NETBIOSNodeTypeChars.indexOf(c))
+					.map!(i => (1 << i).to!ubyte)
+					.fold!((a, b) => ubyte(a | b))
+				)
+				.array();
+			break;
+		case OptionFormat.relayAgent:
+			import dhcptest.options : RelayAgentInformation;
+			bytes = RelayAgentInformation(value).toBytes().dup;
+			break;
+		case OptionFormat.vendorSpecificInformation:
+			import dhcptest.options : VendorSpecificInformation;
+			bytes = VendorSpecificInformation(value).toBytes().dup;
+			break;
+		case OptionFormat.classlessStaticRoute:
+		case OptionFormat.clientIdentifier:
+			throw new Exception(format("Sorry, the format %s is unsupported for parsing. Please specify another format explicitly.", fmt));
+		case OptionFormat.zeroLength:
+			enforce(value == "present", "Value for empty options must be \"present\"");
+			break;
+	}
+
+	return bytes;
+}
+
 /// Print an option in a human-readable format.
 void printOption(File f, in ubyte[] bytes, OptionFormat fmt)
 {
