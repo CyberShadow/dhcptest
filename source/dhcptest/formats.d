@@ -277,6 +277,36 @@ string formatOption(in ubyte[] bytes, OptionFormat fmt)
 			e.msg, maybeAscii(bytes));
 }
 
+unittest
+{
+	// Test formatOption with various formats
+	import dhcptest.options : DHCPMessageType;
+
+	// Test string format
+	assert(formatOption(cast(ubyte[])"hello", OptionFormat.str) == "hello");
+
+	// Test u8 format
+	assert(formatOption([1, 2, 3], OptionFormat.u8) == "1, 2, 3");
+
+	// Test boolean format
+	assert(formatOption([1, 0], OptionFormat.boolean) == "true, false");
+
+	// Test hex format
+	ubyte[] testBytes = [0xDE, 0xAD, 0xBE, 0xEF];
+	auto hexResult = formatOption(testBytes, OptionFormat.hex);
+	assert(hexResult.canFind("DE") && hexResult.canFind("AD"));
+
+	// Test IP format
+	ubyte[] ipBytes = [192, 168, 1, 1];
+	assert(formatOption(ipBytes, OptionFormat.ip) == "192.168.1.1");
+
+	// Test dhcpMessageType format
+	assert(formatOption([DHCPMessageType.discover], OptionFormat.dhcpMessageType) == "discover");
+
+	// Test zero-length format
+	assert(formatOption([], OptionFormat.zeroLength) == "present");
+}
+
 /// Format an option in machine-readable format.
 string formatRawOption(in ubyte[] bytes, OptionFormat fmt)
 {
@@ -308,3 +338,12 @@ string formatRawOption(in ubyte[] bytes, OptionFormat fmt)
 	}
 }
 
+unittest
+{
+	// Test formatRawOption
+	assert(formatRawOption([0xDE, 0xAD], OptionFormat.hex) == "DEAD");
+	assert(formatRawOption(cast(ubyte[])"test", OptionFormat.str) == "test");
+
+	// Raw option should delegate to formatOption for most types
+	assert(formatRawOption([1, 2, 3], OptionFormat.u8) == "1, 2, 3");
+}
