@@ -319,3 +319,73 @@ ubyte[] buildRawPacketData(
 
 	return cast(ubyte[])(&header)[0..1] ~ dhcpData;
 }
+
+/// Format a DHCP packet as a human-readable string
+string formatPacket(
+	DHCPPacket packet,
+	string printOnlyOption = null,
+	scope void delegate(string) onWarning = null)
+{
+	import std.ascii : isAlpha;
+
+	// If printing only a specific option
+	if (printOnlyOption != null && printOnlyOption.length > 0)
+	{
+		string numStr = printOnlyOption;
+		string fmtStr = "";
+		if (numStr.endsWith("]"))
+		{
+			auto numParts = printOnlyOption.findSplit("[");
+			fmtStr = numParts[2][0..$-1];
+			numStr = numParts[0];
+		}
+		auto opt = parseDHCPOptionType(numStr);
+
+		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.unknown;
+		if (fmt == OptionFormat.unknown)
+			fmt = dhcpOptions.get(opt, DHCPOptionSpec.init).format;
+
+		foreach (option; packet.options)
+		{
+			if (option.type == opt)
+			{
+				return formatRawOption(option.data, fmt);
+			}
+		}
+
+		// Option not found, call warning delegate if provided
+		if (onWarning)
+			onWarning(format("(No option %s in packet)", opt));
+		return "";
+	}
+
+	// Format full packet
+	auto output = appender!string();
+	auto opNames = [1:"BOOTREQUEST",2:"BOOTREPLY"];
+	output.formattedWrite!"  op=%s chaddr=%(%02X:%) hops=%d xid=%08X secs=%d flags=%04X\n  ciaddr=%s yiaddr=%s siaddr=%s giaddr=%s sname=%s file=%s\n"(
+		opNames.get(packet.header.op, packet.header.op.to!string),
+		packet.header.chaddr[0..packet.header.hlen],
+		packet.header.hops,
+		ntohl(packet.header.xid),
+		ntohs(packet.header.secs),
+		ntohs(packet.header.flags),
+		ip(packet.header.ciaddr),
+		ip(packet.header.yiaddr),
+		ip(packet.header.siaddr),
+		ip(packet.header.giaddr),
+		packet.header.sname.ptr.to!string,
+		packet.header.file.ptr.to!string,
+	);
+
+	output.formattedWrite!"  %d options:\n"(packet.options.length);
+	foreach (option; packet.options)
+	{
+		auto type = cast(DHCPOptionType)option.type;
+		output.formattedWrite!"    %s: "(formatDHCPOptionType(type));
+		auto fmt = dhcpOptions.get(type, DHCPOptionSpec.init).format;
+		output.put(formatOption(option.data, fmt));
+		output.put("\n");
+	}
+
+	return output.data;
+}
