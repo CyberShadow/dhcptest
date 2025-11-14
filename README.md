@@ -17,7 +17,7 @@ The latest development build for Windows can be downloaded from [GitHub Actions]
 With [DMD](https://dlang.org/download.html#dmd) (or another D compiler) installed, run:
 
 ```
-$ dmd dhcptest.d
+$ dub build
 ```
 
 ## Usage

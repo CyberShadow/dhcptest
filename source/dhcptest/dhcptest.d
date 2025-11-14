@@ -9,7 +9,7 @@
  *   Vladimir Panteleev <vladimir@thecybershadow.net>
  */
 
-module dhcptest;
+module dhcptest.dhcptest;
 
 import core.thread;
 

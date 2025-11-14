@@ -1,0 +1,3 @@
+name "dhcptest"
+license "BSL-1.0"
+targetType "executable"

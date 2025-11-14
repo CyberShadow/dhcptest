@@ -13,7 +13,7 @@ jobs:
         with:
           compiler: dmd-2.100.0
       - name: Build
-        run: dmd dhcptest.d
+        run: dub build
       - name: Upload binary
         if: ${{ matrix.os == 'windows-2019' }}
         uses: actions/upload-artifact@v2
