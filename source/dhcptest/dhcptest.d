@@ -33,6 +33,7 @@ import std.traits;
 import dhcptest.formats;
 import dhcptest.options;
 import dhcptest.packets;
+import dhcptest.network;
 
 version (Windows)
 	static if (__VERSION__ >= 2067)
@@ -44,35 +45,6 @@ version (Posix)
 	import core.sys.posix.netdb : ntohs, htons, ntohl, htonl;
 else
 	static assert(false, "Unsupported platform");
-
-version (linux)
-{
-	import core.sys.posix.sys.ioctl : ioctl, SIOCGIFINDEX;
-	import core.sys.posix.net.if_ : IF_NAMESIZE;
-
-	enum IFNAMSIZ = IF_NAMESIZE;
-	extern(C) struct ifreq
-	{
-		char[IFNAMSIZ] ifr_name = 0;
-		union
-		{
-			private ubyte[IFNAMSIZ] _zeroinit = 0;
-			sockaddr       ifr_addr;
-			sockaddr       ifr_dstaddr;
-			sockaddr       ifr_broadaddr;
-			sockaddr       ifr_netmask;
-			sockaddr       ifr_hwaddr;
-			short          ifr_flags;
-			int            ifr_ifindex;
-			int            ifr_metric;
-			int            ifr_mtu;
-		//	ifmap          ifr_map;
-			char[IFNAMSIZ] ifr_slave;
-			char[IFNAMSIZ] ifr_newname;
-			char*          ifr_data;
-		}
-	}
-}
 
 __gshared string printOnly;
 __gshared bool quiet;
@@ -113,88 +85,6 @@ DHCPPacket generatePacketFromGlobals(ubyte[] mac)
 		throw e;
 	}
 }
-
-void sendPacket(Socket socket, Address addr, string targetIP, ubyte[] mac, DHCPPacket packet)
-{
-	if (!quiet)
-	{
-		stderr.writefln("Sending packet:");
-		stderr.printPacket(packet);
-	}
-	auto data = serializePacket(packet);
-
-	// For raw sockets (Linux), wrap DHCP data in Ethernet/IP/UDP headers
-	version(linux)
-	{
-		static if (is(typeof(AF_PACKET)))
-		if (socket.addressFamily != AF_INET)
-		{
-			data = buildRawPacketData(data, targetIP, mac, clientPort, serverPort);
-		}
-	}
-
-	auto sent = socket.sendTo(data, addr);
-	errnoEnforce(sent > 0, "sendto error");
-	enforce(sent == data.length, "Sent only %d/%d bytes".format(sent, data.length));
-}
-
-bool receivePackets(Socket socket, bool delegate(DHCPPacket, Address) handler, Duration timeout)
-{
-	static ubyte[0x10000] buf;
-	Address address;
-
-	SysTime start = Clock.currTime();
-	SysTime end = start + timeout;
-	auto set = new SocketSet(1);
-
-	while (true)
-	{
-		auto remaining = end - Clock.currTime();
-		if (remaining <= Duration.zero)
-			break;
-
-		set.reset();
-		set.add(socket);
-		int n = Socket.select(set, null, null, remaining);
-		enforce(n >= 0, "select interrupted");
-		if (!n)
-			break; // timeout exceeded
-
-		auto received = socket.receiveFrom(buf[], address);
-		if (received <= 0)
-			throw new Exception("socket.receiveFrom returned %d.".format(received));
-
-		auto receivedData = buf[0..received].dup;
-		try
-		{
-			auto result = handler(parsePacket(receivedData), address);
-			if (!result)
-				return true;
-		}
-		catch (Exception e)
-			stderr.writefln("Error while parsing packet [%(%02X %)]: %s", receivedData, e.toString());
-	}
-
-	// timeout exceeded
-	if (!quiet) stderr.writefln("Timed out after %s.", timeout);
-	return false;
-}
-
-ubyte[] parseMac(string mac)
-{
-	return mac.split(":").map!(s => s.parse!ubyte(16)).array();
-}
-
-version(linux) int getIfaceIndex(Socket s, string name)
-{
-	ifreq req;
-	auto len = min(name.length, req.ifr_name.length);
-	req.ifr_name[0 .. len] = name[0 .. len];
-	errnoEnforce(ioctl(s.handle, SIOCGIFINDEX, &req) == 0, "SIOCGIFINDEX failed");
-	return req.ifr_ifindex;
-}
-
-immutable targetBroadcast = "255.255.255.255";
 
 int run(string[] args)
 {
@@ -298,61 +188,22 @@ int run(string[] args)
 		return 0;
 	}
 
-	auto receiveSocket = new UdpSocket();
-	if (target == targetBroadcast)
-		receiveSocket.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
-	Socket sendSocket;
-	Address sendAddr;
-	if (raw)
-	{
-		static if (is(typeof(AF_PACKET)))
-		{
-			sendSocket = new Socket(cast(AddressFamily)AF_PACKET, SocketType.RAW, ProtocolType.RAW);
-
-			enforce(iface, "Interface not specified, please specify an interface with --iface");
-			auto ifaceIndex = getIfaceIndex(sendSocket, iface);
-
-			enum ETH_ALEN = 6;
-			auto llAddr = new sockaddr_ll;
-			llAddr.sll_ifindex = ifaceIndex;
-			llAddr.sll_halen = ETH_ALEN;
-			llAddr.sll_addr[0 .. 6] = 0xFF;
-			sendAddr = new UnknownAddressReference(cast(sockaddr*)llAddr, sockaddr_ll.sizeof);
-		}
-		else
-			throw new Exception("Raw sockets are not supported on this platform.");
-	}
-	else
-	{
-		sendSocket = receiveSocket;
-		sendAddr = new InternetAddress(target, serverPort);
-	}
+	// Create and configure sockets
+	auto sockets = createSockets(target, serverPort, raw, iface);
 
 	// Parse giaddr
 	giaddr = (new InternetAddress(giaddrStr, 0)).addr.htonl();
 
-	void bindSocket()
+	void bindSocketWithLogging()
 	{
-		version (linux)
-		{
-			if (iface)
-			{
-				enum SO_BINDTODEVICE = cast(SocketOption)25;
-				receiveSocket.setOption(SocketOptionLevel.SOCKET, SO_BINDTODEVICE, cast(void[])iface);
-			}
-		}
-		else
-			enforce(iface is null, "--iface is not available on this platform");
-
-		receiveSocket.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
-		receiveSocket.bind(getAddress(bindAddr, clientPort)[0]);
+		bindSocket(sockets.receiveSocket, bindAddr, clientPort, iface);
 		if (!quiet) stderr.writefln("Listening for DHCP replies on port %d.", clientPort);
 	}
 
 	void runPrompt()
 	{
 		try
-			bindSocket();
+			bindSocketWithLogging();
 		catch (Exception e)
 		{
 			stderr.writeln("Error while attempting to bind socket:");
@@ -365,12 +216,12 @@ int run(string[] args)
 		{
 			try
 			{
-				receiveSocket.receivePackets((DHCPPacket packet, Address address)
+				sockets.receiveSocket.receivePackets((DHCPPacket packet, Address address)
 				{
 					if (!quiet) stderr.writefln("Received packet from %s:", address);
 					stdout.printPacket(packet);
 					return true;
-				}, forever);
+				}, forever, (msg) { if (!quiet) stderr.writefln("%s", msg); });
 			}
 			catch (Exception e)
 			{
@@ -400,7 +251,13 @@ int run(string[] args)
 				case "discover":
 				{
 					ubyte[] mac = line.length > 1 ? parseMac(line[1]) : defaultMac;
-					sendSocket.sendPacket(sendAddr, target, mac, generatePacketFromGlobals(mac));
+					auto packet = generatePacketFromGlobals(mac);
+					if (!quiet)
+					{
+						stderr.writefln("Sending packet:");
+						stderr.printPacket(packet);
+					}
+					sockets.sendSocket.sendPacket(sockets.sendAddress, target, mac, packet, clientPort, serverPort);
 					break;
 				}
 
@@ -436,8 +293,13 @@ int run(string[] args)
 		if (timeout == Duration.zero)
 			timeout = forever;
 
-		bindSocket();
+		bindSocketWithLogging();
 		auto sentPacket = generatePacketFromGlobals(defaultMac);
+		if (!quiet)
+		{
+			stderr.writefln("Sending packet:");
+			stderr.printPacket(sentPacket);
+		}
 
 		int count = 0;
 
@@ -448,7 +310,7 @@ int run(string[] args)
 			SysTime start = Clock.currTime();
 			SysTime end = start + timeout;
 
-			sendSocket.sendPacket(sendAddr, target, defaultMac, sentPacket);
+			sockets.sendSocket.sendPacket(sockets.sendAddress, target, defaultMac, sentPacket, clientPort, serverPort);
 
 			while (true)
 			{
@@ -456,14 +318,14 @@ int run(string[] args)
 				if (remaining <= Duration.zero)
 					break;
 
-				auto result = receiveSocket.receivePackets((DHCPPacket packet, Address address)
+				auto result = sockets.receiveSocket.receivePackets((DHCPPacket packet, Address address)
 				{
 					if (packet.header.xid != sentPacket.header.xid)
 						return true;
 					if (!quiet) stderr.writefln("Received packet from %s:", address);
 					stdout.printPacket(packet);
 					return false;
-				}, remaining);
+				}, remaining, (msg) { if (!quiet) stderr.writefln("%s", msg); });
 
 				if (result && !wait) // Got reply packet and do not wait for all query responses
 					return 0;
