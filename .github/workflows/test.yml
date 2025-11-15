@@ -7,16 +7,16 @@ jobs:
         os: [ubuntu-24.04, windows-2025]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v5
       - name: Install D compiler
-        uses: dlang-community/setup-dlang@1ccbc70a0eff7f264857b53c562aa45fd7f1e479
+        uses: dlang-community/setup-dlang@v2
         with:
           compiler: dmd-2.100.0
       - name: Build
         run: dub build
       - name: Upload binary
         if: ${{ matrix.os == 'windows-2025' }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v5
         with:
           name: dhcptest-${{ matrix.os }}
           path: dhcptest.exe
