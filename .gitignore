@@ -4,6 +4,8 @@
 *.ilk
 *.pdb
 *.res
+*.a
+*.lib
 
 .dub
 /dhcptest

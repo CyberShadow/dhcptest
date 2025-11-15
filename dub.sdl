@@ -1,3 +1,12 @@
 name "dhcptest"
 license "BSL-1.0"
-targetType "executable"
+
+configuration "application" {
+	targetType "executable"
+        mainSourceFile "source/dhcptest/dhcptest.d"
+}
+
+configuration "library" {
+	targetType "library"
+	excludedSourceFiles "source/dhcptest/dhcptest.d"
+}
