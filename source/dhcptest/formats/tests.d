@@ -828,7 +828,7 @@ unittest
 	{
 		// classlessStaticRoute - now uses array syntax in JSON mode
 		auto routeBytes = cast(ubyte[])[0x18, 0xc0, 0xa8, 0x02, 0xc0, 0xa8, 0x01, 0x32];
-		auto routeMinimal = formatValue(routeBytes, OptionFormat.classlessStaticRoute, Syntax.minimal);
+		auto routeMinimal = formatValue(routeBytes, OptionFormat.classlessStaticRoute, Syntax.verbose);
 		auto routeJson = formatValue(routeBytes, OptionFormat.classlessStaticRoute, Syntax.json);
 
 		assert(routeMinimal == "192.168.2.0/24 -> 192.168.1.50");
@@ -847,13 +847,13 @@ unittest
 	// Verify proper output format for dhcpOptionType (now fixed to be syntax-aware)
 	{
 		// dhcpOptionType - now produces valid JSON with unquoted numbers
-		auto optionMinimal = formatValue(cast(ubyte[])[3], OptionFormat.dhcpOptionType, Syntax.minimal);
+		auto optionMinimal = formatValue(cast(ubyte[])[3], OptionFormat.dhcpOptionType, Syntax.verbose);
 		auto optionJson = formatValue(cast(ubyte[])[3], OptionFormat.dhcpOptionType, Syntax.json);
 		assert(optionMinimal == "3 (Router Option)");
 		assert(optionJson == "3");
 
 		// dhcpOptionTypes - now produces valid JSON with unquoted numbers
-		auto optionsMinimal = formatValue(cast(ubyte[])[3, 6], OptionFormat.dhcpOptionTypes, Syntax.minimal);
+		auto optionsMinimal = formatValue(cast(ubyte[])[3, 6], OptionFormat.dhcpOptionTypes, Syntax.verbose);
 		auto optionsJson = formatValue(cast(ubyte[])[3, 6], OptionFormat.dhcpOptionTypes, Syntax.json);
 		assert(optionsMinimal == "[3 (Router Option), 6 (Domain Name Server Option)]");
 		assert(optionsJson == "[3, 6]");

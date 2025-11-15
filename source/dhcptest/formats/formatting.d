@@ -65,8 +65,12 @@ struct OptionFormatter(Out)
 						auto hexStr = bytes.map!(b => format("%02X", b)).join(" ");
 						formatScalar(hexStr);
 						break;
-					case Syntax.minimal:
-						// Minimal mode: output hex directly without quoting
+					case Syntax.plain:
+						// Plain mode: hex without ASCII decoration (machine-readable)
+						output.put(bytes.map!(b => format("%02X", b)).join(" "));
+						break;
+					case Syntax.verbose:
+						// Verbose mode: hex with ASCII decoration
 						output.put(maybeAscii(bytes));
 						break;
 				}
@@ -108,8 +112,12 @@ struct OptionFormatter(Out)
 						// JSON mode: output as plain number
 						formatNumber(value);
 						break;
-					case Syntax.minimal:
-						// Minimal mode: number with human-readable duration as comment
+					case Syntax.plain:
+						// Plain mode: just the number, no duration comment
+						formatNumber(value);
+						break;
+					case Syntax.verbose:
+						// Verbose mode: number with human-readable duration as comment
 						formatNumber(value);
 						formatComment(value.seconds.to!string);
 						break;
@@ -195,8 +203,12 @@ struct OptionFormatter(Out)
 						}
 						output.put(']');
 						break;
-					case Syntax.minimal:
-						// Minimal mode: use arrow format "subnet/mask -> router, ..."
+					case Syntax.plain:
+						// Plain mode: arrow format like verbose (machine-readable)
+						output.put(routes.join(", "));
+						break;
+					case Syntax.verbose:
+						// Verbose mode: use arrow format "subnet/mask -> router, ..."
 						output.put(routes.join(", "));
 						break;
 				}
@@ -258,8 +270,19 @@ struct OptionFormatter(Out)
 				output.put(':');
 				output.put(' ');
 				break;
-			case Syntax.minimal:
-				// Minimal mode: unquoted field name
+			case Syntax.plain:
+				// Plain mode: unquoted like verbose
+				output.put(name);
+				if (defaultFormat != OptionFormat.unknown && formatUsed != defaultFormat)
+				{
+					output.put('[');
+					output.put(formatUsed.to!string);
+					output.put(']');
+				}
+				output.put('=');
+				break;
+			case Syntax.verbose:
+				// Verbose mode: unquoted field name
 				output.put(name);
 				// Show format override after the name
 				if (defaultFormat != OptionFormat.unknown && formatUsed != defaultFormat)
@@ -291,8 +314,23 @@ struct OptionFormatter(Out)
 				// JSON mode: all string values must be quoted
 				needsQuoting = true;
 				break;
-			case Syntax.minimal:
-				// Minimal mode: only quote if necessary
+			case Syntax.plain:
+				// Plain mode: only quote if necessary (like verbose)
+				needsQuoting = value.length == 0;
+				if (!needsQuoting)
+				{
+					foreach (ch; value)
+					{
+						if (isSpecialChar(ch) || isWhitespace(ch) || ch < 0x20 || ch > 0x7E)
+						{
+							needsQuoting = true;
+							break;
+						}
+					}
+				}
+				break;
+			case Syntax.verbose:
+				// Verbose mode: only quote if necessary
 				needsQuoting = value.length == 0;
 				if (!needsQuoting)
 				{
@@ -373,8 +411,11 @@ struct OptionFormatter(Out)
 			case Syntax.json:
 				// Comments are not part of JSON - no-op
 				return;
-			case Syntax.minimal:
-				// Minimal mode: output comment as (text)
+			case Syntax.plain:
+				// Plain mode: no comments (machine-readable)
+				return;
+			case Syntax.verbose:
+				// Verbose mode: output comment as (text)
 				output.put(' ');
 				output.put('(');
 				foreach (ch; comment)
@@ -407,7 +448,10 @@ struct OptionFormatter(Out)
 							// JSON doesn't support \0, use \u0000
 							output.put(`\u0000`);
 							break;
-						case Syntax.minimal:
+						case Syntax.plain:
+							output.put(`\0`);
+							break;
+						case Syntax.verbose:
 							output.put(`\0`);
 							break;
 					}
@@ -425,8 +469,10 @@ struct OptionFormatter(Out)
 								// JSON requires Unicode escapes
 								formattedWrite(output, `\u%04X`, cast(ubyte)c);
 								break;
-							case Syntax.minimal:
+							case Syntax.verbose:
 								// Minimal mode uses hex escapes
+							case Syntax.plain:
+								// Plain mode uses hex escapes like verbose
 								formattedWrite(output, `\x%02X`, cast(ubyte)c);
 								break;
 						}
@@ -466,7 +512,10 @@ struct OptionFormatter(Out)
 				if (fields.length > 0)
 					output.put(' ');
 				break;
-			case Syntax.minimal:
+			case Syntax.plain:
+				// No opening delimiter in plain mode
+				break;
+			case Syntax.verbose:
 				// No opening delimiter in minimal mode
 				break;
 		}
@@ -490,7 +539,10 @@ struct OptionFormatter(Out)
 					output.put(' ');
 				output.put('}');
 				break;
-			case Syntax.minimal:
+			case Syntax.plain:
+				// No closing delimiter in plain mode
+				break;
+			case Syntax.verbose:
 				// No closing delimiter in minimal mode
 				break;
 		}
@@ -588,7 +640,7 @@ struct OptionFormatter(Out)
 // ============================================================================
 
 /// Format a value as DSL string (convenience wrapper)
-string formatValue(const ubyte[] bytes, OptionFormat type, Syntax syntax = Syntax.minimal)
+string formatValue(const ubyte[] bytes, OptionFormat type, Syntax syntax = Syntax.verbose)
 {
 	auto buf = appender!string;
 	auto formatter = OptionFormatter!(typeof(buf))(buf, syntax);
@@ -604,8 +656,8 @@ string formatValue(const ubyte[] bytes, OptionFormat type, Syntax syntax = Synta
 /// This is an alias to formatValue for backwards compatibility
 alias formatOption = formatValue;
 
-/// Format option value to string without comment (formats.d compatibility)
+/// Format option value to string without comment (machine-readable plain format)
 string formatRawOption(in ubyte[] bytes, OptionFormat fmt)
 {
-	return formatValue(bytes, fmt);
+	return formatValue(bytes, fmt, Syntax.plain);
 }

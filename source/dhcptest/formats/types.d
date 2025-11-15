@@ -81,7 +81,8 @@ enum OptionFormat
 /// Output syntax style for formatting
 enum Syntax
 {
-	minimal,  /// Minimal DSL syntax: [field=value], unquoted names
+	verbose,  /// Verbose DSL syntax with comments and decorations
+	plain,      /// Plain DSL syntax without comments (machine-readable)
 	json,     /// JSON syntax: {"field": value}, quoted names
 }
 

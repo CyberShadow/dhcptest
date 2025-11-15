@@ -347,7 +347,8 @@ ubyte[] buildRawPacketData(
 string formatPacket(
 	DHCPPacket packet,
 	string printOnlyOption = null,
-	scope void delegate(string) onWarning = null)
+	scope void delegate(string) onWarning = null,
+	Syntax syntax = Syntax.verbose)
 {
 	import std.ascii : isAlpha;
 
@@ -406,7 +407,7 @@ string formatPacket(
 		auto type = cast(DHCPOptionType)option.type;
 		output.formattedWrite!"    %s: "(formatDHCPOptionType(type));
 		auto fmt = dhcpOptions.get(type, DHCPOptionSpec.init).format;
-		output.put(formatOption(option.data, fmt));
+		output.put(formatOption(option.data, fmt, syntax));
 		output.put("\n");
 	}
 
