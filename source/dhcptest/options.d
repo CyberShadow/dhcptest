@@ -52,7 +52,7 @@ static this()
 	[
 		  0 : DHCPOptionSpec("Pad Option", OptionFormat.special),
 		  1 : DHCPOptionSpec("Subnet Mask", OptionFormat.ip),
-		  2 : DHCPOptionSpec("Time Offset", OptionFormat.time),
+		  2 : DHCPOptionSpec("Time Offset", OptionFormat.duration),
 		  3 : DHCPOptionSpec("Router Option", OptionFormat.ip),
 		  4 : DHCPOptionSpec("Time Server Option", OptionFormat.ip),
 		  5 : DHCPOptionSpec("Name Server Option", OptionFormat.ip),
@@ -101,15 +101,15 @@ static this()
 		 48 : DHCPOptionSpec("X Window System Font Server Option", OptionFormat.ip),
 		 49 : DHCPOptionSpec("X Window System Display Manager Option", OptionFormat.ip),
 		 50 : DHCPOptionSpec("Requested IP Address", OptionFormat.ip),
-		 51 : DHCPOptionSpec("IP Address Lease Time", OptionFormat.time),
+		 51 : DHCPOptionSpec("IP Address Lease Time", OptionFormat.duration),
 		 52 : DHCPOptionSpec("Option Overload", OptionFormat.clientIdentifier),
 		 53 : DHCPOptionSpec("DHCP Message Type", OptionFormat.dhcpMessageType),
 		 54 : DHCPOptionSpec("Server Identifier", OptionFormat.ip),
 		 55 : DHCPOptionSpec("Parameter Request List", OptionFormat.dhcpOptionType),
 		 56 : DHCPOptionSpec("Message", OptionFormat.str),
 		 57 : DHCPOptionSpec("Maximum DHCP Message Size", OptionFormat.u16),
-		 58 : DHCPOptionSpec("Renewal (T1) Time Value", OptionFormat.time),
-		 59 : DHCPOptionSpec("Rebinding (T2) Time Value", OptionFormat.time),
+		 58 : DHCPOptionSpec("Renewal (T1) Time Value", OptionFormat.duration),
+		 59 : DHCPOptionSpec("Rebinding (T2) Time Value", OptionFormat.duration),
 		 60 : DHCPOptionSpec("Vendor class identifier", OptionFormat.str),
 		 61 : DHCPOptionSpec("Client-identifier", OptionFormat.u8),
 		 64 : DHCPOptionSpec("Network Information Service+ Domain Option", OptionFormat.str),
@@ -155,145 +155,3 @@ DHCPOptionType parseDHCPOptionType(string type)
 			return cast(DHCPOptionType)opt;
 	throw new Exception("Unknown DHCP option type: " ~ type);
 }
-
-// Length-prefixed sub-option list
-struct VLList(Type)
-{
-	struct Suboption
-	{
-		Type type;
-		char[] value;
-
-		this(Type type, inout(char)[] value) inout { this.type = type; this.value = value; }
-
-		this(ref string s)
-		{
-			assert(s.length);
-			if (s[0].isDigit)
-			{
-				ubyte typeByte;
-				enforce(s.formattedRead!"%s"(&typeByte) == 1, "Expected sub-option type");
-				type = cast(Type)typeByte;
-			}
-			else
-				enforce(s.formattedRead!"%s"(&type) == 1, "Expected sub-option type");
-
-			enforce(s.skipOver("="), "Expected = in sub-option");
-			value = s.parseElement!(char[])();
-		}
-
-		string toString() const
-		{
-			return format("%s=%(%s%)",
-				type.to!string.startsWith("cast(") ? type.to!ubyte.to!string : type.to!string,
-				value.only);
-		}
-
-		const(ubyte)[] toBytes() const pure
-		{
-			const(ubyte)[] result;
-			if (type != Type.raw)
-			{
-				result ~= type.to!ubyte;
-				result ~= value.representation.length.to!ubyte;
-			}
-			result ~= value.representation;
-			return result;
-		}
-	}
-	Suboption[] suboptions;
-
-	this(inout(ubyte)[] bytes) inout
-	{
-		inout(Suboption)[] suboptions;
-		while (bytes.length >= 2)
-		{
-			auto len = bytes[1];
-			if (2 + len > bytes.length)
-				break;
-			suboptions ~= inout Suboption(cast(Type)bytes[0], cast(inout(char)[])bytes[2 .. 2 + len]);
-			bytes = bytes[2 + len .. $];
-		}
-		if (bytes.length)
-			suboptions ~= inout Suboption(Type.raw, cast(inout(char)[]) bytes);
-		this.suboptions = suboptions;
-	}
-
-	this(/*ref*/ string s)
-	{
-		while (s.length)
-		{
-			suboptions ~= Suboption(s);
-			if (s.length)
-			{
-				enforce(s.skipOver(","), "',' expected");
-				while (s.skipOver(" ")) {}
-			}
-		}
-	}
-
-	string toString() const
-	{
-		return format!"%-(%s, %)"(suboptions);
-	}
-
-	const(ubyte)[] toBytes() const pure
-	{
-		return suboptions.map!((ref suboption) => suboption.toBytes).join();
-	}
-}
-
-enum RelayAgentInformationSuboption
-{
-	raw = -1, // Not a real sub-option - used to store slack / unparseable bytes
-
-	agentCircuitID = 1,
-	agentRemoteID = 2,
-}
-
-alias RelayAgentInformation = VLList!RelayAgentInformationSuboption;
-
-unittest
-{
-	void test(ubyte[] bytes, string str)
-	{
-		auto fromBytes = RelayAgentInformation(bytes);
-		assert(fromBytes.toBytes() == bytes, [fromBytes.toBytes(), bytes].to!string);
-		assert(fromBytes.toString() == str, [fromBytes.toString(), str].to!string);
-		auto fromStr = RelayAgentInformation(str);
-		assert(fromStr.toBytes() == bytes);
-		assert(fromStr.toString() == str);
-	}
-
-	test(
-		[],
-		``
-	);
-	test(
-		[0x00],
-		`raw="\0"`
-	);
-	test(
-		[0x01, 0x03, 'f', 'o', 'o'],
-		`agentCircuitID="foo"`
-	);
-	test(
-		[0x01, 0x03, 'f', 'o', 'o', 0x42],
-		`agentCircuitID="foo", raw="B"`
-	);
-	test(
-		[0x01, 0x03, 'f', 'o', 'o', 0x02, 0x03, 'b', 'a', 'r'],
-		`agentCircuitID="foo", agentRemoteID="bar"`
-	);
-	test(
-		[0x03, 0x03, 'f', 'o', 'o'],
-		`3="foo"`
-	);
-}
-
-enum VendorSpecificInformationSuboption
-{
-	raw = -1, // Not a real sub-option - used to store slack / unparseable bytes
-}
-
-alias VendorSpecificInformation = VLList!VendorSpecificInformationSuboption;
