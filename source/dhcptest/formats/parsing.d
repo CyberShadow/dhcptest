@@ -393,6 +393,63 @@ struct OptionParser
 		);
 	}
 
+	/// Parse field name with optional format override: name or name[format]
+	/// Returns: tuple of (field name, format if specified, null otherwise)
+	auto parseFieldSpec()
+	{
+		import std.typecons : tuple, Nullable;
+
+		// Parse field name
+		auto nameStart = pos;
+		while (!atEnd && !isSpecialChar(peek()) && !isWhitespace(peek()))
+			consume();
+		string name = input[nameStart .. pos];
+		enforce(name.length > 0, "Expected field name");
+
+		skipWhitespace();
+
+		// Optional format override: field[format]
+		Nullable!OptionFormat formatOverride;
+		if (tryConsume('['))
+		{
+			auto fmtStart = pos;
+			while (!atEnd && peek() != ']')
+				consume();
+			auto formatName = input[fmtStart .. pos];
+			expect(']');
+			skipWhitespace();
+
+			// Parse format name to OptionFormat enum
+			formatOverride = formatName.to!OptionFormat;
+		}
+
+		return tuple(name, formatOverride);
+	}
+
+	/// Parse a single field with format: name[format]=value
+	/// Returns: tuple of (field name, format used, value bytes)
+	auto parseField(scope OptionFormat delegate(string name) getDefaultFieldFormat)
+	{
+		import std.typecons : tuple;
+
+		auto spec = parseFieldSpec();
+		string name = spec[0];
+		auto formatOverride = spec[1];
+
+		// Use format override if specified, otherwise use default
+		OptionFormat fieldFormat = formatOverride.isNull
+			? getDefaultFieldFormat(name)
+			: formatOverride.get;
+
+		expect('=');
+		skipWhitespace();
+
+		// Parse value according to field format
+		ubyte[] value = parseValue(fieldFormat);
+
+		return tuple(name, fieldFormat, value);
+	}
+
 	/// Parse a struct/map-like value with field=value pairs
 	/// Supports both bracketed [field=value, field2=value2] and unbracketed (top-level) syntax
 	/// getDefaultFieldFormat: determines the format for each field by name
@@ -441,40 +498,11 @@ struct OptionParser
 			if (!hasBracket && atEnd)
 				break;
 
-			// Parse field name
-			auto nameStart = pos;
-			while (!atEnd && !isSpecialChar(peek()) && !isWhitespace(peek()))
-				consume();
-			string name = input[nameStart .. pos];
-			enforce(name.length > 0, "Expected field name");
-
-			skipWhitespace();
-
-			// Optional format override: field[format]=value
-			OptionFormat fieldFormat;
-			if (tryConsume('['))
-			{
-				auto fmtStart = pos;
-				while (!atEnd && peek() != ']')
-					consume();
-				auto formatName = input[fmtStart .. pos];
-				expect(']');
-				skipWhitespace();
-
-				// Parse format name to OptionFormat enum
-				fieldFormat = formatName.to!OptionFormat;
-			}
-			else
-			{
-				// Use default format for this field
-				fieldFormat = getDefaultFieldFormat(name);
-			}
-
-			expect('=');
-			skipWhitespace();
-
-			// Parse value according to field format
-			ubyte[] value = parseValue(fieldFormat);
+			// Parse single field using parseField helper
+			auto parsed = parseField(getDefaultFieldFormat);
+			string name = parsed[0];
+			// OptionFormat fieldFormat = parsed[1];  // Not needed here
+			ubyte[] value = parsed[2];
 
 			// Store in fields map
 			fields[name] = value;

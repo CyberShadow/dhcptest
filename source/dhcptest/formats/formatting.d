@@ -180,6 +180,28 @@ struct OptionFormatter(Out)
 		}
 	}
 
+	/// Format a field as name=value or name[format]=value
+	/// If formatOverride differs from defaultFormat, include the format in brackets
+	private void formatField(
+		string name,
+		const(ubyte)[] value,
+		OptionFormat formatUsed,
+		OptionFormat defaultFormat = OptionFormat.unknown)
+	{
+		output.put(name);
+
+		// Show format override if it differs from default
+		if (defaultFormat != OptionFormat.unknown && formatUsed != defaultFormat)
+		{
+			output.put('[');
+			output.put(formatUsed.to!string);
+			output.put(']');
+		}
+
+		output.put('=');
+		formatValue(value, formatUsed);
+	}
+
 	/// Format a scalar string value for DSL output
 	private void formatScalar(string value, string comment = null)
 	{
@@ -307,9 +329,7 @@ struct OptionFormatter(Out)
 			first = false;
 
 			auto fieldFormat = getFieldFormat(name);
-			output.put(name);
-			output.put('=');
-			formatValue(valueBytes, fieldFormat);
+			formatField(name, valueBytes, fieldFormat);
 		}
 	}
 
