@@ -9,6 +9,7 @@ module dhcptest.formats.formatting;
 import std.algorithm;
 import std.array;
 import std.conv;
+import std.datetime;
 import std.exception : enforce;
 import std.format;
 import std.range;
@@ -39,7 +40,7 @@ struct OptionFormatter(Out)
 	Syntax syntax;  /// Output syntax style (minimal or json)
 
 	/// Format a value as DSL string to the output sink
-	void formatValue(const ubyte[] bytes, OptionFormat type, string comment = null)
+	void formatValue(const ubyte[] bytes, OptionFormat type)
 	{
 		final switch (type)
 		{
@@ -47,15 +48,13 @@ struct OptionFormatter(Out)
 			case OptionFormat.unknown:
 				// Format as hex for unknown types
 				output.put(maybeAscii(bytes));
-				if (comment !is null && comment.length > 0)
-					formatComment(comment);
 				break;
 			case OptionFormat.special:
 				throw new Exception("Cannot format special format");
 
 			case OptionFormat.str:
 			case OptionFormat.fullString:
-				formatScalar(cast(string)bytes, comment);
+				formatScalar(cast(string)bytes);
 				break;
 
 			case OptionFormat.hex:
@@ -64,42 +63,40 @@ struct OptionFormatter(Out)
 					case Syntax.json:
 						// JSON mode: hex values must be quoted strings
 						auto hexStr = bytes.map!(b => format("%02X", b)).join(" ");
-						formatScalar(hexStr, comment);
+						formatScalar(hexStr);
 						break;
 					case Syntax.minimal:
 						// Minimal mode: output hex directly without quoting
 						output.put(maybeAscii(bytes));
-						if (comment !is null && comment.length > 0)
-							formatComment(comment);
 						break;
 				}
 				break;
 
 			case OptionFormat.ip:
 				enforce(bytes.length == 4, "IP address must be 4 bytes");
-				formatScalar(format("%(%d.%)", bytes), comment);
+				formatScalar(format("%(%d.%)", bytes));
 				break;
 
 			case OptionFormat.boolean:
 				enforce(bytes.length == 1, "Boolean must be 1 byte");
-				formatScalar(bytes[0] ? "true" : "false", comment);
+				formatScalar(bytes[0] ? "true" : "false");
 				break;
 
 			case OptionFormat.u8:
 				enforce(bytes.length == 1, "u8 must be 1 byte");
-				formatNumber(bytes[0], comment);
+				formatNumber(bytes[0]);
 				break;
 
 			case OptionFormat.u16:
 				enforce(bytes.length == 2, "u16 must be 2 bytes");
 				auto value = ntohs(*cast(ushort*)bytes.ptr);
-				formatNumber(value, comment);
+				formatNumber(value);
 				break;
 
 			case OptionFormat.u32:
 				enforce(bytes.length == 4, "u32 must be 4 bytes");
 				auto value = ntohl(*cast(uint*)bytes.ptr);
-				formatNumber(value, comment);
+				formatNumber(value);
 				break;
 
 			case OptionFormat.duration:
@@ -109,21 +106,19 @@ struct OptionFormatter(Out)
 				{
 					case Syntax.json:
 						// JSON mode: output as plain number
-						formatNumber(value, comment);
+						formatNumber(value);
 						break;
 					case Syntax.minimal:
-						// Minimal mode: use ntime for human-readable format
-						auto netValue = *cast(uint*)bytes.ptr;
-						output.put(ntime(netValue));
-						if (comment !is null && comment.length > 0)
-							formatComment(comment);
+						// Minimal mode: number with human-readable duration as comment
+						formatNumber(value);
+						formatComment(value.seconds.to!string);
 						break;
 				}
 				break;
 
 			case OptionFormat.dhcpMessageType:
 				enforce(bytes.length == 1, "dhcpMessageType must be 1 byte");
-				formatScalar((cast(DHCPMessageType)bytes[0]).to!string, comment);
+				formatScalar((cast(DHCPMessageType)bytes[0]).to!string);
 				break;
 
 			case OptionFormat.dhcpOptionType:
@@ -135,9 +130,8 @@ struct OptionFormatter(Out)
 				// Get the option name from the table, or use generic name
 				auto spec = dhcpOptions.get(optionType, DHCPOptionSpec.init);
 				string optionName = spec.name.length > 0 ? spec.name : format("Option %d", bytes[0]);
-				formatNumber(bytes[0], optionName);
-				if (comment !is null && comment.length > 0)
-					formatComment(comment);
+				formatNumber(bytes[0]);
+				formatComment(optionName);
 				break;
 
 			case OptionFormat.netbiosNodeType:
@@ -147,36 +141,36 @@ struct OptionFormatter(Out)
 				foreach (i; 0 .. NETBIOSNodeTypeChars.length)
 					if ((1 << i) & bytes[0])
 						result ~= NETBIOSNodeTypeChars[i];
-				formatScalar(result, comment);
+				formatScalar(result);
 				break;
 
 			case OptionFormat.zeroLength:
 				enforce(bytes.length == 0, "Zero-length must be empty");
-				formatScalar("present", comment);
+				formatScalar("present");
 				break;
 
 			case OptionFormat.ips:
-				formatArray(bytes, OptionFormat.ip, 4, comment);
+				formatArray(bytes, OptionFormat.ip, 4);
 				break;
 
 			case OptionFormat.u8s:
-				formatArray(bytes, OptionFormat.u8, 1, comment);
+				formatArray(bytes, OptionFormat.u8, 1);
 				break;
 
 			case OptionFormat.u16s:
-				formatArray(bytes, OptionFormat.u16, 2, comment);
+				formatArray(bytes, OptionFormat.u16, 2);
 				break;
 
 			case OptionFormat.u32s:
-				formatArray(bytes, OptionFormat.u32, 4, comment);
+				formatArray(bytes, OptionFormat.u32, 4);
 				break;
 
 			case OptionFormat.durations:
-				formatArray(bytes, OptionFormat.duration, 4, comment);
+				formatArray(bytes, OptionFormat.duration, 4);
 				break;
 
 			case OptionFormat.dhcpOptionTypes:
-				formatArray(bytes, OptionFormat.dhcpOptionType, 1, comment);
+				formatArray(bytes, OptionFormat.dhcpOptionType, 1);
 				break;
 
 			case OptionFormat.classlessStaticRoute:
@@ -200,14 +194,10 @@ struct OptionFormatter(Out)
 							output.put(']');
 						}
 						output.put(']');
-						if (comment !is null && comment.length > 0)
-							formatComment(comment);
 						break;
 					case Syntax.minimal:
 						// Minimal mode: use arrow format "subnet/mask -> router, ..."
 						output.put(routes.join(", "));
-						if (comment !is null && comment.length > 0)
-							formatComment(comment);
 						break;
 				}
 				break;
@@ -215,20 +205,14 @@ struct OptionFormatter(Out)
 			case OptionFormat.clientIdentifier:
 				// Format as "type=N, clientIdentifier=hex"
 				formatClientIdentifier(bytes);
-				if (comment !is null && comment.length > 0)
-					formatComment(comment);
 				break;
 
 			case OptionFormat.relayAgent:
 				formatTLVList!RelayAgentSuboption(bytes);
-				if (comment !is null && comment.length > 0)
-					formatComment(comment);
 				break;
 
 			case OptionFormat.vendorSpecificInformation:
 				formatTLVList!VendorSpecificSuboption(bytes);
-				if (comment !is null && comment.length > 0)
-					formatComment(comment);
 				break;
 
 			case OptionFormat.option:
@@ -243,8 +227,6 @@ struct OptionFormatter(Out)
 				// Format as field: optionName=value
 				formatField(formatDHCPOptionType(opt), valueBytes, defaultFmt);
 
-				if (comment !is null && comment.length > 0)
-					formatComment(comment);
 				break;
 		}
 	}
@@ -294,17 +276,13 @@ struct OptionFormatter(Out)
 	}
 
 	/// Format a numeric value (unquoted in both syntaxes)
-	private void formatNumber(T : ulong)(T value, string comment = null)
+	private void formatNumber(T : ulong)(T value)
 	{
 		output.put(value.to!string);
-
-		// Add comment if present (not used in JSON mode)
-		if (comment !is null && comment.length > 0)
-			formatComment(comment);
 	}
 
 	/// Format a scalar string value for DSL output
-	private void formatScalar(string value, string comment = null)
+	private void formatScalar(string value)
 	{
 		bool needsQuoting;
 		final switch (syntax)
@@ -341,14 +319,10 @@ struct OptionFormatter(Out)
 		{
 			output.put(value);
 		}
-
-		// Add comment if present (not used in JSON mode)
-		if (comment !is null && comment.length > 0)
-			formatComment(comment);
 	}
 
 	/// Format an array
-	private void formatArray(const ubyte[] bytes, OptionFormat elementType, size_t elementSize, string comment = null)
+	private void formatArray(const ubyte[] bytes, OptionFormat elementType, size_t elementSize)
 	{
 		enforce(bytes.length % elementSize == 0, "Array bytes length not multiple of element size");
 
@@ -365,9 +339,6 @@ struct OptionFormatter(Out)
 		}
 
 		output.put(']');
-
-		if (comment !is null && comment.length > 0)
-			formatComment(comment);
 	}
 
 	/// Format a comment: (text)
@@ -594,11 +565,11 @@ struct OptionFormatter(Out)
 // ============================================================================
 
 /// Format a value as DSL string (convenience wrapper)
-string formatValue(const ubyte[] bytes, OptionFormat type, string comment = null, Syntax syntax = Syntax.minimal)
+string formatValue(const ubyte[] bytes, OptionFormat type, Syntax syntax = Syntax.minimal)
 {
 	auto buf = appender!string;
 	auto formatter = OptionFormatter!(typeof(buf))(buf, syntax);
-	formatter.formatValue(bytes, type, comment);
+	formatter.formatValue(bytes, type);
 	return buf.data;
 }
 
@@ -613,5 +584,5 @@ alias formatOption = formatValue;
 /// Format option value to string without comment (formats.d compatibility)
 string formatRawOption(in ubyte[] bytes, OptionFormat fmt)
 {
-	return formatValue(bytes, fmt, null);
+	return formatValue(bytes, fmt);
 }

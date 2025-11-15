@@ -138,13 +138,6 @@ uint parseTimeValue(string s)
 	return s.to!uint;
 }
 
-/// Format time value with duration string
-/// Example: "3600 (1 hour)"
-string ntime(uint n)
-{
-	return "%d (%s)".format(n.ntohl, n.ntohl.seconds);
-}
-
 /// Format hex bytes, showing ASCII interpretation if all bytes are printable
 /// Parseable format: hex first, then ASCII comment
 /// Example: "74 65 73 74 (test)"

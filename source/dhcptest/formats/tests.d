@@ -40,7 +40,7 @@ private void testRoundtrip(string input, OptionFormat fmt)
 	foreach (syntax; [EnumMembers!Syntax])
 	{
 		// Format with this syntax
-		auto formatted = formatValue(bytes1, fmt, null, syntax);
+		auto formatted = formatValue(bytes1, fmt, syntax);
 
 		// Parse formatted output
 		auto bytes2 = parseOption(formatted, fmt);
@@ -151,11 +151,6 @@ unittest
 		assert(formatValue([1], OptionFormat.boolean) == "true");
 		assert(formatValue([0], OptionFormat.boolean) == "false");
 		assert(formatValue([], OptionFormat.zeroLength) == "present");
-	}
-
-	// Test with comments
-	{
-		assert(formatValue([42], OptionFormat.u8, "the answer") == "42 (the answer)");
 	}
 }
 
@@ -650,7 +645,7 @@ unittest
 	// Test formatRawOption (no comment)
 	string formatRawOption(in ubyte[] bytes, OptionFormat fmt)
 	{
-		return formatValue(bytes, fmt, null);
+		return formatValue(bytes, fmt);
 	}
 	assert(formatRawOption([42], OptionFormat.u8) == "42");
 
@@ -809,32 +804,32 @@ unittest
 	// Formats that should produce valid JSON
 	{
 		// Scalar types - produce quoted strings
-		assertNotThrown(parseJSON(formatValue([42], OptionFormat.u8, null, Syntax.json), JSONOptions.strictParsing));
-		assertNotThrown(parseJSON(formatValue([1], OptionFormat.boolean, null, Syntax.json), JSONOptions.strictParsing));
-		assertNotThrown(parseJSON(formatValue([192, 168, 1, 1], OptionFormat.ip, null, Syntax.json), JSONOptions.strictParsing));
-		assertNotThrown(parseJSON(formatValue(cast(ubyte[])"test", OptionFormat.str, null, Syntax.json), JSONOptions.strictParsing));
-		assertNotThrown(parseJSON(formatValue([0xDE, 0xAD], OptionFormat.hex, null, Syntax.json), JSONOptions.strictParsing));
-		assertNotThrown(parseJSON(formatValue([3], OptionFormat.dhcpOptionType, null, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([42], OptionFormat.u8, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([1], OptionFormat.boolean, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([192, 168, 1, 1], OptionFormat.ip, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue(cast(ubyte[])"test", OptionFormat.str, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([0xDE, 0xAD], OptionFormat.hex, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([3], OptionFormat.dhcpOptionType, Syntax.json), JSONOptions.strictParsing));
 
 		// Array types - produce JSON arrays
-		assertNotThrown(parseJSON(formatValue([1, 2, 3], OptionFormat.u8s, null, Syntax.json), JSONOptions.strictParsing));
-		assertNotThrown(parseJSON(formatValue([192, 168, 1, 1, 10, 0, 0, 1], OptionFormat.ips, null, Syntax.json), JSONOptions.strictParsing));
-		assertNotThrown(parseJSON(formatValue([3, 6], OptionFormat.dhcpOptionTypes, null, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([1, 2, 3], OptionFormat.u8s, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([192, 168, 1, 1, 10, 0, 0, 1], OptionFormat.ips, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([3, 6], OptionFormat.dhcpOptionTypes, Syntax.json), JSONOptions.strictParsing));
 
 		// Struct types - produce JSON objects
-		assertNotThrown(parseJSON(formatValue([0x01, 0xAA, 0xBB], OptionFormat.clientIdentifier, null, Syntax.json), JSONOptions.strictParsing));
-		assertNotThrown(parseJSON(formatValue([0x01, 0x04, 't', 'e', 's', 't'], OptionFormat.relayAgent, null, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([0x01, 0xAA, 0xBB], OptionFormat.clientIdentifier, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([0x01, 0x04, 't', 'e', 's', 't'], OptionFormat.relayAgent, Syntax.json), JSONOptions.strictParsing));
 
 		// Special types - produce JSON arrays
-		assertNotThrown(parseJSON(formatValue([0x18, 0xc0, 0xa8, 0x02, 0xc0, 0xa8, 0x01, 0x32], OptionFormat.classlessStaticRoute, null, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([0x18, 0xc0, 0xa8, 0x02, 0xc0, 0xa8, 0x01, 0x32], OptionFormat.classlessStaticRoute, Syntax.json), JSONOptions.strictParsing));
 	}
 
 	// Verify classlessStaticRoute now produces valid JSON
 	{
 		// classlessStaticRoute - now uses array syntax in JSON mode
 		auto routeBytes = cast(ubyte[])[0x18, 0xc0, 0xa8, 0x02, 0xc0, 0xa8, 0x01, 0x32];
-		auto routeMinimal = formatValue(routeBytes, OptionFormat.classlessStaticRoute, cast(string)null, Syntax.minimal);
-		auto routeJson = formatValue(routeBytes, OptionFormat.classlessStaticRoute, cast(string)null, Syntax.json);
+		auto routeMinimal = formatValue(routeBytes, OptionFormat.classlessStaticRoute, Syntax.minimal);
+		auto routeJson = formatValue(routeBytes, OptionFormat.classlessStaticRoute, Syntax.json);
 
 		assert(routeMinimal == "192.168.2.0/24 -> 192.168.1.50");
 		assert(routeJson == `[["192.168.2.0/24", "192.168.1.50"]]`);
@@ -852,14 +847,14 @@ unittest
 	// Verify proper output format for dhcpOptionType (now fixed to be syntax-aware)
 	{
 		// dhcpOptionType - now produces valid JSON with unquoted numbers
-		auto optionMinimal = formatValue(cast(ubyte[])[3], OptionFormat.dhcpOptionType, cast(string)null, Syntax.minimal);
-		auto optionJson = formatValue(cast(ubyte[])[3], OptionFormat.dhcpOptionType, cast(string)null, Syntax.json);
+		auto optionMinimal = formatValue(cast(ubyte[])[3], OptionFormat.dhcpOptionType, Syntax.minimal);
+		auto optionJson = formatValue(cast(ubyte[])[3], OptionFormat.dhcpOptionType, Syntax.json);
 		assert(optionMinimal == "3 (Router Option)");
 		assert(optionJson == "3");
 
 		// dhcpOptionTypes - now produces valid JSON with unquoted numbers
-		auto optionsMinimal = formatValue(cast(ubyte[])[3, 6], OptionFormat.dhcpOptionTypes, cast(string)null, Syntax.minimal);
-		auto optionsJson = formatValue(cast(ubyte[])[3, 6], OptionFormat.dhcpOptionTypes, cast(string)null, Syntax.json);
+		auto optionsMinimal = formatValue(cast(ubyte[])[3, 6], OptionFormat.dhcpOptionTypes, Syntax.minimal);
+		auto optionsJson = formatValue(cast(ubyte[])[3, 6], OptionFormat.dhcpOptionTypes, Syntax.json);
 		assert(optionsMinimal == "[3 (Router Option), 6 (Domain Name Server Option)]");
 		assert(optionsJson == "[3, 6]");
 	}
