@@ -210,6 +210,10 @@ static this()
 		 // See IANA Processor Architecture Types registry for full list
 		 // Common values: 0=x86 BIOS, 6=x86 UEFI, 7=x64 UEFI, 10=ARM32 UEFI, 11=ARM64 UEFI
 		 93 : DHCPOptionSpec("Client System Architecture Type", OptionFormat.processorArchitecture),
+		 // RFC 5859 - TFTP Server Address Option for DHCPv4
+		 // List of IPv4 addresses for TFTP/configuration servers (Cisco VoIP phones, etc.)
+		 // Servers should be listed in order of preference
+		150 : DHCPOptionSpec("TFTP Server Address", OptionFormat.ips),
 		100 : DHCPOptionSpec("PCode", OptionFormat.str),
 		101 : DHCPOptionSpec("TCode", OptionFormat.str),
 		108 : DHCPOptionSpec("IPv6-Only Preferred", OptionFormat.u32),
@@ -282,4 +286,29 @@ unittest
 	auto unknown = parseOption("255", OptionFormat.processorArchitecture);
 	assert(unknown == [0x00, 0xFF]);
 	assert(formatValue(unknown, OptionFormat.processorArchitecture) == "255");
+}
+
+unittest
+{
+	// Test Option 150 - TFTP Server Address (RFC 5859)
+	// Used by Cisco and Polycom VoIP phones
+
+	assert(dhcpOptions[150].name == "TFTP Server Address");
+	assert(dhcpOptions[150].format == OptionFormat.ips);
+
+	// Test single TFTP server
+	auto single = parseOption("192.168.1.10", OptionFormat.ips);
+	assert(single == [192, 168, 1, 10]);
+	assert(formatValue(single, OptionFormat.ips) == "[192.168.1.10]");
+
+	// Test multiple TFTP servers (redundancy)
+	// Example: Primary and backup TFTP servers for VoIP phones
+	auto multi = parseOption("[192.168.1.10, 192.168.1.11]", OptionFormat.ips);
+	assert(multi == [192, 168, 1, 10, 192, 168, 1, 11]);
+	assert(formatValue(multi, OptionFormat.ips) == "[192.168.1.10, 192.168.1.11]");
+
+	// Test roundtrip
+	auto formatted = formatValue(multi, OptionFormat.ips);
+	auto reparsed = parseOption(formatted, OptionFormat.ips);
+	assert(reparsed == multi);
 }
