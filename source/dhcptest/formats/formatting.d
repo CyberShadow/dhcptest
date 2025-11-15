@@ -231,6 +231,11 @@ struct OptionFormatter(Out)
 				formatClientFQDN(bytes);
 				break;
 
+			case OptionFormat.userClass:
+				// Format as array of strings
+				formatUserClassArray(bytes);
+				break;
+
 			case OptionFormat.relayAgent:
 				formatTLVList!RelayAgentSuboption(bytes);
 				break;
@@ -684,6 +689,27 @@ struct OptionFormatter(Out)
 				formatScalar(formatDNSName(nameBytes));
 				break;
 		}
+	}
+
+	/// Format User Class array from bytes to output (RFC 3004)
+	/// Format: array of length-prefixed strings
+	/// Example: [0x05 "class" 0x04 "test"] -> ["class", "test"]
+	private void formatUserClassArray(in ubyte[] bytes)
+	{
+		auto classes = formatUserClass(bytes);
+
+		// Use formatArray with callback-based approach
+		formatArray(
+			// extractItems: convert strings to ubyte[][] (as str format)
+			() {
+				ubyte[][] items;
+				foreach (cls; classes)
+					items ~= cast(ubyte[])cls;
+				return items;
+			},
+			// getItemFormat: all items are strings
+			(size_t index) => OptionFormat.str
+		);
 	}
 }
 

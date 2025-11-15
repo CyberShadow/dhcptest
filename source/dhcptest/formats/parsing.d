@@ -197,6 +197,9 @@ struct OptionParser
 			case OptionFormat.clientFQDN:
 				return parseClientFQDN();
 
+			case OptionFormat.userClass:
+				return parseUserClassArray();
+
 			case OptionFormat.option:
 				// Parse DHCP option specification: name[format]=value
 				// Encoding: [optionType][value...]
@@ -498,6 +501,57 @@ struct OptionParser
 				return result;
 			}
 		);
+	}
+
+	/// Parse User Class array (RFC 3004)
+	/// Format: ["class1", "class2", ...] or just "single" for a single class
+	ubyte[] parseUserClassArray()
+	{
+		string[] classes;
+
+		skipWhitespace();
+
+		// Check if we have an array with brackets
+		if (!atEnd && peek() == '[')
+		{
+			// Array format: [class1, class2] or ["class1", "class2"]
+			consume(); // consume '['
+			skipWhitespace();
+
+			// Save atTopLevel state and set to false for parsing array elements
+			bool savedAtTopLevel = atTopLevel;
+			atTopLevel = false;
+
+			bool first = true;
+			while (!atEnd && peek() != ']')
+			{
+				if (!first)
+				{
+					skipWhitespace();
+					expect(',');
+					skipWhitespace();
+				}
+				first = false;
+
+				// Read each string (handles both quoted and unquoted)
+				auto cls = readString(OptionFormat.str);
+				classes ~= cls;
+				skipWhitespace();
+			}
+
+			// Restore atTopLevel state
+			atTopLevel = savedAtTopLevel;
+
+			expect(']');
+		}
+		else
+		{
+			// Single string format: class or "class"
+			auto cls = readString(atTopLevel ? OptionFormat.fullString : OptionFormat.str);
+			classes ~= cls;
+		}
+
+		return parseUserClass(classes);
 	}
 
 	/// Parse field name with optional format override: name or name[format]
@@ -1000,6 +1054,7 @@ struct OptionParser
 			case OptionFormat.classlessStaticRoute:
 			case OptionFormat.clientIdentifier:
 			case OptionFormat.clientFQDN:
+			case OptionFormat.userClass:
 			case OptionFormat.option:
 				throw new Exception("readString called with non-string type");
 		}

@@ -203,7 +203,10 @@ static this()
 		 74 : DHCPOptionSpec("Default Internet Relay Chat (IRC) Server Option", OptionFormat.ip),
 		 75 : DHCPOptionSpec("StreetTalk Server Option", OptionFormat.ip),
 		 76 : DHCPOptionSpec("StreetTalk Directory Assistance (STDA) Server Option", OptionFormat.ip),
-		 77 : DHCPOptionSpec("User-Class-Identifier", OptionFormat.str),
+		 // RFC 3004 - The User Class Option for DHCP
+		 // Format: array of length-prefixed strings [len1][data1][len2][data2]...
+		 // Each user class is a separate opaque identifier configured by the administrator
+		 77 : DHCPOptionSpec("User Class", OptionFormat.userClass),
 		 80 : DHCPOptionSpec("Rapid Commit", OptionFormat.zeroLength),
 		 // RFC 4702 - The DHCP Client FQDN Option
 		 // Format: flags (1 byte) + rcode1 (1 byte, deprecated) + rcode2 (1 byte, deprecated) + domain name (DNS wire format)
@@ -345,4 +348,31 @@ unittest
 	auto formatted = formatValue(basic, OptionFormat.clientFQDN);
 	auto reparsed = parseOption(formatted, OptionFormat.clientFQDN);
 	assert(reparsed == basic);
+}
+
+unittest
+{
+	// Test Option 77 - User Class (RFC 3004)
+	// Used to identify client type/category for DHCP policy selection
+	// Format: array of length-prefixed strings
+
+	assert(dhcpOptions[77].name == "User Class");
+	assert(dhcpOptions[77].format == OptionFormat.userClass);
+
+	// Test single user class
+	// "myuserclass" -> [0x0b "myuserclass"]
+	auto single = parseOption("myuserclass", OptionFormat.userClass);
+	assert(single == [0x0b, 'm', 'y', 'u', 's', 'e', 'r', 'c', 'l', 'a', 's', 's']);
+	assert(formatValue(single, OptionFormat.userClass) == "[myuserclass]");
+
+	// Test multiple user classes (RFC 3004 compliant)
+	// ["class1", "class2"] -> [0x06 "class1" 0x06 "class2"]
+	auto multi = parseOption("[\"class1\", \"class2\"]", OptionFormat.userClass);
+	assert(multi == [0x06, 'c', 'l', 'a', 's', 's', '1', 0x06, 'c', 'l', 'a', 's', 's', '2']);
+	assert(formatValue(multi, OptionFormat.userClass) == "[class1, class2]");
+
+	// Test roundtrip
+	auto formatted = formatValue(multi, OptionFormat.userClass);
+	auto reparsed = parseOption(formatted, OptionFormat.userClass);
+	assert(reparsed == multi);
 }

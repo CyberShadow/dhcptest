@@ -72,6 +72,7 @@ enum OptionFormat
 	classlessStaticRoute,      /// Classless static routes (RFC 3442)
 	clientIdentifier, /// Client identifier (type + data)
 	clientFQDN,       /// Client FQDN (flags + domain name, RFC 4702)
+	userClass,        /// User Class (array of length-prefixed strings, RFC 3004)
 	option,           /// DHCP option specification: name[format]=value
 
 	// Backwards compatibility aliases (deprecated)
@@ -296,6 +297,53 @@ ubyte[] parseDNSName(string name)
 
 	// Add terminating zero byte
 	result ~= 0x00;
+
+	return result;
+}
+
+// ============================================================================
+// User Class Format Helpers (RFC 3004)
+// ============================================================================
+
+/// Format User Class (array of length-prefixed strings) to array of strings
+/// RFC 3004 format: [len1][data1][len2][data2]...
+/// Example: [0x05 "class" 0x04 "test"] -> ["class", "test"]
+string[] formatUserClass(in ubyte[] bytes)
+{
+	string[] result;
+	size_t i = 0;
+
+	while (i < bytes.length)
+	{
+		// Read length byte
+		enforce(i < bytes.length, "User Class truncated: missing length byte");
+		ubyte len = bytes[i++];
+
+		// Read data bytes
+		enforce(i + len <= bytes.length, "User Class truncated: not enough bytes for class data");
+		result ~= cast(string)bytes[i .. i + len];
+		i += len;
+	}
+
+	return result;
+}
+
+/// Parse array of strings to User Class format (length-prefixed strings)
+/// Example: ["class", "test"] -> [0x05 "class" 0x04 "test"]
+ubyte[] parseUserClass(string[] classes)
+{
+	ubyte[] result;
+
+	foreach (cls; classes)
+	{
+		enforce(cls.length <= 255, "User Class string too long (max 255 bytes)");
+
+		// Add length byte
+		result ~= cast(ubyte)cls.length;
+
+		// Add data bytes
+		result ~= cast(ubyte[])cls;
+	}
 
 	return result;
 }
