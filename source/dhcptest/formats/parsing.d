@@ -194,6 +194,9 @@ struct OptionParser
 			case OptionFormat.clientIdentifier:
 				return parseClientIdentifier();
 
+			case OptionFormat.clientFQDN:
+				return parseClientFQDN();
+
 			case OptionFormat.option:
 				// Parse DHCP option specification: name[format]=value
 				// Encoding: [optionType][value...]
@@ -458,6 +461,40 @@ struct OptionParser
 
 				ubyte[] result = fields["type"];
 				result ~= fields["clientIdentifier"];
+				return result;
+			}
+		);
+	}
+
+	/// Parse Client FQDN struct (RFC 4702)
+	/// Format: flags=N, rcode1=N, rcode2=N, name=domain.com
+	ubyte[] parseClientFQDN()
+	{
+		return parseStruct(
+			// getDefaultFieldFormat: flags/rcode1/rcode2 are u8, name is str (will be converted to DNS wire format)
+			(string name) {
+				if (name == "flags") return OptionFormat.u8;
+				if (name == "rcode1") return OptionFormat.u8;
+				if (name == "rcode2") return OptionFormat.u8;
+				if (name == "name") return OptionFormat.str;
+				return OptionFormat.u8;
+			},
+			// finalize: encode as flags + rcode1 + rcode2 + DNS wire format name
+			(ubyte[][string] fields) {
+				enforce("flags" in fields, "Client FQDN must have 'flags' field");
+				enforce("rcode1" in fields, "Client FQDN must have 'rcode1' field");
+				enforce("rcode2" in fields, "Client FQDN must have 'rcode2' field");
+				enforce("name" in fields, "Client FQDN must have 'name' field");
+
+				ubyte[] result;
+				result ~= fields["flags"];
+				result ~= fields["rcode1"];
+				result ~= fields["rcode2"];
+
+				// Convert the name string to DNS wire format
+				auto nameStr = cast(string)fields["name"];
+				result ~= parseDNSName(nameStr);
+
 				return result;
 			}
 		);
@@ -962,6 +999,7 @@ struct OptionParser
 			case OptionFormat.vendorSpecificInformation:
 			case OptionFormat.classlessStaticRoute:
 			case OptionFormat.clientIdentifier:
+			case OptionFormat.clientFQDN:
 			case OptionFormat.option:
 				throw new Exception("readString called with non-string type");
 		}

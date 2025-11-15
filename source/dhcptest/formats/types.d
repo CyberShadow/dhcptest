@@ -71,6 +71,7 @@ enum OptionFormat
 	vendorSpecificInformation, /// Vendor-specific information
 	classlessStaticRoute,      /// Classless static routes (RFC 3442)
 	clientIdentifier, /// Client identifier (type + data)
+	clientFQDN,       /// Client FQDN (flags + domain name, RFC 4702)
 	option,           /// DHCP option specification: name[format]=value
 
 	// Backwards compatibility aliases (deprecated)
@@ -229,6 +230,72 @@ ubyte[] parseClasslessStaticRoute(string s)
 
 	// Add router IP
 	result ~= routerIP;
+
+	return result;
+}
+
+// ============================================================================
+// DNS Wire Format Helpers (RFC 1035)
+// ============================================================================
+
+/// Format DNS wire format domain name to human-readable string
+/// DNS wire format uses length-prefixed labels: [len][label][len][label]...[0x00]
+/// Example: [0x07 "example" 0x03 "com" 0x00] -> "example.com"
+string formatDNSName(in ubyte[] bytes)
+{
+	if (bytes.length == 0)
+		return "";
+
+	string[] labels;
+	size_t i = 0;
+
+	while (i < bytes.length)
+	{
+		ubyte len = bytes[i++];
+
+		// Zero-length label marks end of name
+		if (len == 0)
+			break;
+
+		// Ensure we have enough bytes for this label
+		enforce(i + len <= bytes.length, "DNS name label extends past end of data");
+
+		// Extract label as string
+		labels ~= cast(string)bytes[i .. i + len];
+		i += len;
+	}
+
+	return labels.join(".");
+}
+
+/// Parse human-readable domain name to DNS wire format
+/// Example: "example.com" -> [0x07 "example" 0x03 "com" 0x00]
+ubyte[] parseDNSName(string name)
+{
+	name = name.strip();
+
+	// Empty name is just a zero byte
+	if (name.length == 0)
+		return [0x00];
+
+	// Split into labels
+	auto labels = name.split(".");
+
+	ubyte[] result;
+	foreach (label; labels)
+	{
+		enforce(label.length > 0, "DNS label cannot be empty");
+		enforce(label.length <= 63, "DNS label cannot exceed 63 characters");
+
+		// Add length byte
+		result ~= cast(ubyte)label.length;
+
+		// Add label characters
+		result ~= cast(ubyte[])label;
+	}
+
+	// Add terminating zero byte
+	result ~= 0x00;
 
 	return result;
 }

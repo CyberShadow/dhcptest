@@ -226,6 +226,11 @@ struct OptionFormatter(Out)
 				formatClientIdentifier(bytes);
 				break;
 
+			case OptionFormat.clientFQDN:
+				// Format as "flags=N, rcode1=N, rcode2=N, name=domain"
+				formatClientFQDN(bytes);
+				break;
+
 			case OptionFormat.relayAgent:
 				formatTLVList!RelayAgentSuboption(bytes);
 				break;
@@ -639,6 +644,46 @@ struct OptionFormatter(Out)
 				return OptionFormat.hex;
 			}
 		);
+	}
+
+	/// Format Client FQDN option from bytes to output (RFC 4702)
+	/// Format: flags (1 byte) + rcode1 (1 byte) + rcode2 (1 byte) + domain name (DNS wire format)
+	/// Example: [0x01, 0x00, 0xFF, 0x07, "example", 0x03, "com", 0x00] -> "flags=1, rcode1=0, rcode2=255, name=example.com"
+	private void formatClientFQDN(in ubyte[] bytes)
+	{
+		enforce(bytes.length >= 3, "Client FQDN must have at least 3 bytes (flags, rcode1, rcode2)");
+
+		ubyte flags = bytes[0];
+		ubyte rcode1 = bytes[1];
+		ubyte rcode2 = bytes[2];
+		auto nameBytes = bytes.length > 3 ? bytes[3 .. $] : [];
+
+		// Format flags field
+		formatField("flags", [flags], OptionFormat.u8);
+		output.put(", ");
+
+		// Format rcode1 field
+		formatField("rcode1", [rcode1], OptionFormat.u8);
+		output.put(", ");
+
+		// Format rcode2 field
+		formatField("rcode2", [rcode2], OptionFormat.u8);
+		output.put(", ");
+
+		// Format name field (DNS wire format)
+		final switch (syntax)
+		{
+			case Syntax.json:
+				formatScalar("name");
+				output.put(": ");
+				formatScalar(formatDNSName(nameBytes));
+				break;
+			case Syntax.plain:
+			case Syntax.verbose:
+				output.put("name=");
+				formatScalar(formatDNSName(nameBytes));
+				break;
+		}
 	}
 }
 

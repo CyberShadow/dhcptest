@@ -205,6 +205,11 @@ static this()
 		 76 : DHCPOptionSpec("StreetTalk Directory Assistance (STDA) Server Option", OptionFormat.ip),
 		 77 : DHCPOptionSpec("User-Class-Identifier", OptionFormat.str),
 		 80 : DHCPOptionSpec("Rapid Commit", OptionFormat.zeroLength),
+		 // RFC 4702 - The DHCP Client FQDN Option
+		 // Format: flags (1 byte) + rcode1 (1 byte, deprecated) + rcode2 (1 byte, deprecated) + domain name (DNS wire format)
+		 // Used by clients to communicate their fully qualified domain name to DHCP servers
+		 // and to negotiate which party (client or server) should perform DNS updates
+		 81 : DHCPOptionSpec("Client FQDN", OptionFormat.clientFQDN),
 		 82 : DHCPOptionSpec("Relay Agent Information", OptionFormat.relayAgent),
 		 // RFC 4578 / RFC 5970 - Client System Architecture Type
 		 // See IANA Processor Architecture Types registry for full list
@@ -311,4 +316,33 @@ unittest
 	auto formatted = formatValue(multi, OptionFormat.ips);
 	auto reparsed = parseOption(formatted, OptionFormat.ips);
 	assert(reparsed == multi);
+}
+
+unittest
+{
+	// Test Option 81 - Client FQDN (RFC 4702)
+	// Used by DHCP clients to communicate their fully qualified domain name
+	// and negotiate which party should perform DNS updates
+
+	assert(dhcpOptions[81].name == "Client FQDN");
+	assert(dhcpOptions[81].format == OptionFormat.clientFQDN);
+
+	// Test basic FQDN with typical flags
+	// flags=1 (S bit set, server should update A record)
+	// rcode1=0, rcode2=255 (deprecated fields, RFC-recommended values)
+	// name="client.example.com"
+	// DNS wire format: [0x06 "client" 0x07 "example" 0x03 "com" 0x00]
+	auto basic = parseOption("flags=1, rcode1=0, rcode2=255, name=client.example.com", OptionFormat.clientFQDN);
+	assert(basic == [0x01, 0x00, 0xFF, 0x06, 'c', 'l', 'i', 'e', 'n', 't', 0x07, 'e', 'x', 'a', 'm', 'p', 'l', 'e', 0x03, 'c', 'o', 'm', 0x00]);
+	assert(formatValue(basic, OptionFormat.clientFQDN) == "flags=1, rcode1=0, rcode2=255, name=client.example.com");
+
+	// Test empty domain name (client requesting server-provided name)
+	auto empty = parseOption("flags=0, rcode1=0, rcode2=255, name=", OptionFormat.clientFQDN);
+	assert(empty == [0x00, 0x00, 0xFF, 0x00]);
+	assert(formatValue(empty, OptionFormat.clientFQDN) == "flags=0, rcode1=0, rcode2=255, name=\"\"");
+
+	// Test roundtrip
+	auto formatted = formatValue(basic, OptionFormat.clientFQDN);
+	auto reparsed = parseOption(formatted, OptionFormat.clientFQDN);
+	assert(reparsed == basic);
 }
