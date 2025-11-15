@@ -48,6 +48,7 @@ else
 
 __gshared string printOnly;
 __gshared bool quiet;
+__gshared Syntax outputFormat = Syntax.verbose;
 
 /// Print a DHCP packet to a file
 void printPacket(File f, DHCPPacket packet)
@@ -59,7 +60,9 @@ void printPacket(File f, DHCPPacket packet)
 			stderr.writefln("%s", msg);
 	}
 
-	f.write(formatPacket(packet, printOnly, &warningHandler));
+	// Use plain format for --print-only, otherwise use the global format setting
+	Syntax syntax = (printOnly != null && printOnly.length > 0) ? Syntax.plain : outputFormat;
+	f.write(formatPacket(packet, printOnly, &warningHandler, syntax));
 	f.flush();
 }
 
@@ -115,6 +118,7 @@ int run(string[] args)
 		"wait", &wait,
 		"request", &requestedOptions,
 		"print-only", &printOnly,
+		"format", &outputFormat,
 		"timeout", &timeoutSeconds,
 		"tries", &tries,
 		"option", &sentOptions,
@@ -180,6 +184,11 @@ int run(string[] args)
 		stderr.writeln("                  You can specify a desired format using the syntax N[FORMAT]");
 		stderr.writeln("                  See above for a list of FORMATs. For example:");
 		stderr.writeln("                  --print-only \"N[hex]\" or --print-only \"N[IP]\"");
+		stderr.writeln("                  When --print-only is used, output defaults to plain format.");
+		stderr.writeln("  --format SYNTAX Control the output format. SYNTAX can be:");
+		stderr.writeln("                  verbose: Human-readable with comments (default)");
+		stderr.writeln("                  plain:   Human-readable without comments");
+		stderr.writeln("                  json:    Machine-readable (JSON syntax, no comments)");
 		stderr.writeln("  --timeout N     Wait N seconds for a reply, after which retry or exit.");
 		stderr.writeln("                  Default is 60 seconds. Can be a fractional number.");
 		stderr.writeln("                  A value of 0 causes dhcptest to wait indefinitely.");
