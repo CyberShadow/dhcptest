@@ -236,6 +236,11 @@ struct OptionFormatter(Out)
 				formatUserClassArray(bytes);
 				break;
 
+			case OptionFormat.domainSearch:
+				// Format as array of domain names
+				formatDomainSearchArray(bytes);
+				break;
+
 			case OptionFormat.relayAgent:
 				formatTLVList!RelayAgentSuboption(bytes);
 				break;
@@ -705,6 +710,27 @@ struct OptionFormatter(Out)
 				ubyte[][] items;
 				foreach (cls; classes)
 					items ~= cast(ubyte[])cls;
+				return items;
+			},
+			// getItemFormat: all items are strings
+			(size_t index) => OptionFormat.str
+		);
+	}
+
+	/// Format Domain Search list from bytes to output (RFC 3397)
+	/// Format: array of DNS names (with compression support)
+	/// Example: [eng.apple.com., marketing.apple.com.] (may use DNS compression)
+	private void formatDomainSearchArray(in ubyte[] bytes)
+	{
+		auto domains = parseDomainSearchList(bytes);
+
+		// Use formatArray with callback-based approach
+		formatArray(
+			// extractItems: convert domain strings to ubyte[][] (as str format)
+			() {
+				ubyte[][] items;
+				foreach (domain; domains)
+					items ~= cast(ubyte[])domain;
 				return items;
 			},
 			// getItemFormat: all items are strings

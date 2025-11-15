@@ -15,6 +15,7 @@ import std.exception : enforce;
 import std.format;
 import std.range;
 import std.string;
+import std.typecons : Tuple, tuple;
 
 // Import DHCP-specific types and helpers
 public import dhcptest.options : DHCPMessageType, DHCPOptionType, NETBIOSNodeType, NETBIOSNodeTypeChars, ProcessorArchitecture, parseDHCPOptionType, formatDHCPOptionType, parseProcessorArchitecture, formatProcessorArchitecture;
@@ -73,6 +74,7 @@ enum OptionFormat
 	clientIdentifier, /// Client identifier (type + data)
 	clientFQDN,       /// Client FQDN (flags + domain name, RFC 4702)
 	userClass,        /// User Class (array of length-prefixed strings, RFC 3004)
+	domainSearch,     /// Domain Search List (array of DNS names, RFC 3397)
 	option,           /// DHCP option specification: name[format]=value
 
 	// Backwards compatibility aliases (deprecated)
@@ -299,6 +301,98 @@ ubyte[] parseDNSName(string name)
 	result ~= 0x00;
 
 	return result;
+}
+
+/// Parse DNS name with compression support (RFC 1035 section 4.1.4)
+/// Returns: (parsed name, bytes consumed)
+/// Compression pointers reference offsets within the full data buffer
+private Tuple!(string, size_t) parseDNSNameWithCompression(in ubyte[] data, size_t offset, in ubyte[] fullData)
+{
+
+	string[] labels;
+	size_t pos = offset;
+	size_t[] visited; // Track visited offsets to detect loops
+
+	while (pos < data.length)
+	{
+		// Check for compression pointer (top 2 bits = 11)
+		if ((data[pos] & 0xC0) == 0xC0)
+		{
+			// Compression pointer: 2 bytes, top 2 bits are 11, rest is offset
+			enforce(pos + 1 < data.length, "Truncated compression pointer");
+
+			ushort pointer = ((data[pos] & 0x3F) << 8) | data[pos + 1];
+
+			// Prevent infinite loops
+			enforce(!visited.canFind(pointer), "Circular compression pointer detected");
+			visited ~= pointer;
+
+			// Follow the pointer within fullData
+			enforce(pointer < fullData.length, "Compression pointer out of bounds");
+
+			// Recursively parse from the pointer location
+			auto result = parseDNSNameWithCompression(fullData, pointer, fullData);
+			labels ~= result[0].split(".").filter!(l => l.length > 0).array;
+
+			// Compression pointer consumes 2 bytes and ends the name
+			return tuple(labels.join("."), pos - offset + 2);
+		}
+
+		ubyte len = data[pos++];
+
+		// Zero-length label marks end of name
+		if (len == 0)
+			break;
+
+		// Ensure we have enough bytes for this label
+		enforce(pos + len <= data.length, "DNS name label extends past end of data");
+
+		// Extract label
+		labels ~= cast(string)data[pos .. pos + len];
+		pos += len;
+	}
+
+	return tuple(labels.join("."), pos - offset);
+}
+
+/// Format array of DNS names to wire format (RFC 3397)
+/// Returns concatenated DNS names in wire format (uncompressed for simplicity)
+ubyte[] formatDomainSearchList(string[] domains)
+{
+	ubyte[] result;
+
+	foreach (domain; domains)
+	{
+		result ~= parseDNSName(domain);
+	}
+
+	return result;
+}
+
+/// Parse domain search list from wire format (RFC 3397)
+/// Handles DNS compression pointers
+string[] parseDomainSearchList(in ubyte[] bytes)
+{
+
+	string[] domains;
+	size_t pos = 0;
+
+	while (pos < bytes.length)
+	{
+		auto result = parseDNSNameWithCompression(bytes, pos, bytes);
+		string domain = result[0];
+		size_t consumed = result[1];
+
+		if (domain.length > 0)
+			domains ~= domain;
+
+		pos += consumed;
+
+		// Safety check to prevent infinite loops
+		enforce(consumed > 0, "DNS name parsing made no progress");
+	}
+
+	return domains;
 }
 
 // ============================================================================

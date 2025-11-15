@@ -228,6 +228,11 @@ static this()
 		114 : DHCPOptionSpec("DHCP Captive-Portal", OptionFormat.str),
 		116 : DHCPOptionSpec("Auto Config", OptionFormat.boolean),
 		118 : DHCPOptionSpec("Subnet Selection", OptionFormat.ip),
+		// RFC 3397 - Dynamic Host Configuration Protocol (DHCP) Domain Search Option
+		// Format: Array of DNS domain names with compression support (RFC 1035)
+		// Used for DNS search domain list (e.g., "example.com", "test.org")
+		// Some OS versions prefer this over option 15 for default domain
+		119 : DHCPOptionSpec("Domain Search", OptionFormat.domainSearch),
 		121 : DHCPOptionSpec("Classless Static Route Option", OptionFormat.classlessStaticRoute),
 		249 : DHCPOptionSpec("Microsoft Classless Static Route", OptionFormat.classlessStaticRoute),
 		252 : DHCPOptionSpec("Web Proxy Auto-Discovery", OptionFormat.str),
@@ -375,4 +380,43 @@ unittest
 	auto formatted = formatValue(multi, OptionFormat.userClass);
 	auto reparsed = parseOption(formatted, OptionFormat.userClass);
 	assert(reparsed == multi);
+}
+
+unittest
+{
+	// Test Option 119 - Domain Search (RFC 3397)
+	// Used for DNS search domain list
+	// Format: Array of DNS domain names with optional compression
+
+	assert(dhcpOptions[119].name == "Domain Search");
+	assert(dhcpOptions[119].format == OptionFormat.domainSearch);
+
+	// Test single domain
+	// "example.com" -> [0x07 "example" 0x03 "com" 0x00]
+	auto single = parseOption("example.com", OptionFormat.domainSearch);
+	assert(single == [0x07, 'e', 'x', 'a', 'm', 'p', 'l', 'e', 0x03, 'c', 'o', 'm', 0x00]);
+	assert(formatValue(single, OptionFormat.domainSearch) == "[example.com]");
+
+	// Test multiple domains (uncompressed format)
+	// ["eng.apple.com", "marketing.apple.com"]
+	auto multi = parseOption("[\"eng.apple.com\", \"marketing.apple.com\"]", OptionFormat.domainSearch);
+	// Uncompressed: eng.apple.com. + marketing.apple.com.
+	assert(multi == [
+		0x03, 'e', 'n', 'g', 0x05, 'a', 'p', 'p', 'l', 'e', 0x03, 'c', 'o', 'm', 0x00,
+		0x09, 'm', 'a', 'r', 'k', 'e', 't', 'i', 'n', 'g', 0x05, 'a', 'p', 'p', 'l', 'e', 0x03, 'c', 'o', 'm', 0x00
+	]);
+	assert(formatValue(multi, OptionFormat.domainSearch) == "[eng.apple.com, marketing.apple.com]");
+
+	// Test compressed format parsing (from RFC 3397 example)
+	// "eng.apple.com." + "marketing" + pointer to offset 4 (apple.com.)
+	auto compressed = cast(ubyte[])[
+		0x03, 'e', 'n', 'g', 0x05, 'a', 'p', 'p', 'l', 'e', 0x03, 'c', 'o', 'm', 0x00,  // eng.apple.com.
+		0x09, 'm', 'a', 'r', 'k', 'e', 't', 'i', 'n', 'g', 0xC0, 0x04  // marketing + pointer to offset 4
+	];
+	assert(formatValue(compressed, OptionFormat.domainSearch) == "[eng.apple.com, marketing.apple.com]");
+
+	// Test roundtrip (will be uncompressed)
+	auto formatted = formatValue(multi, OptionFormat.domainSearch);
+	auto reparsed = parseOption(formatted, OptionFormat.domainSearch);
+	assert(formatValue(reparsed, OptionFormat.domainSearch) == formatted);
 }

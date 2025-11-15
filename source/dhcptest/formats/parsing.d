@@ -200,6 +200,9 @@ struct OptionParser
 			case OptionFormat.userClass:
 				return parseUserClassArray();
 
+			case OptionFormat.domainSearch:
+				return parseDomainSearchArray();
+
 			case OptionFormat.option:
 				// Parse DHCP option specification: name[format]=value
 				// Encoding: [optionType][value...]
@@ -552,6 +555,57 @@ struct OptionParser
 		}
 
 		return parseUserClass(classes);
+	}
+
+	/// Parse Domain Search array (RFC 3397)
+	/// Format: ["example.com", "test.org"] or just "example.com" for a single domain
+	ubyte[] parseDomainSearchArray()
+	{
+		string[] domains;
+
+		skipWhitespace();
+
+		// Check if we have an array with brackets
+		if (!atEnd && peek() == '[')
+		{
+			// Array format: [domain1, domain2] or ["domain1", "domain2"]
+			consume(); // consume '['
+			skipWhitespace();
+
+			// Save atTopLevel state and set to false for parsing array elements
+			bool savedAtTopLevel = atTopLevel;
+			atTopLevel = false;
+
+			bool first = true;
+			while (!atEnd && peek() != ']')
+			{
+				if (!first)
+				{
+					skipWhitespace();
+					expect(',');
+					skipWhitespace();
+				}
+				first = false;
+
+				// Read each domain name (handles both quoted and unquoted)
+				auto domain = readString(OptionFormat.str);
+				domains ~= domain;
+				skipWhitespace();
+			}
+
+			// Restore atTopLevel state
+			atTopLevel = savedAtTopLevel;
+
+			expect(']');
+		}
+		else
+		{
+			// Single domain format: domain or "domain"
+			auto domain = readString(atTopLevel ? OptionFormat.fullString : OptionFormat.str);
+			domains ~= domain;
+		}
+
+		return formatDomainSearchList(domains);
 	}
 
 	/// Parse field name with optional format override: name or name[format]
@@ -1055,6 +1109,7 @@ struct OptionParser
 			case OptionFormat.clientIdentifier:
 			case OptionFormat.clientFQDN:
 			case OptionFormat.userClass:
+			case OptionFormat.domainSearch:
 			case OptionFormat.option:
 				throw new Exception("readString called with non-string type");
 		}
