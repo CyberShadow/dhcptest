@@ -17,7 +17,7 @@ import std.range;
 import std.string;
 
 // Import DHCP-specific types and helpers
-public import dhcptest.options : DHCPMessageType, DHCPOptionType, NETBIOSNodeType, NETBIOSNodeTypeChars, parseDHCPOptionType, formatDHCPOptionType;
+public import dhcptest.options : DHCPMessageType, DHCPOptionType, NETBIOSNodeType, NETBIOSNodeTypeChars, ProcessorArchitecture, parseDHCPOptionType, formatDHCPOptionType, parseProcessorArchitecture, formatProcessorArchitecture;
 
 // Import network byte order functions
 version (Windows)
@@ -55,6 +55,7 @@ enum OptionFormat
 	dhcpMessageType,  /// DHCP message type enum
 	dhcpOptionType,   /// DHCP option type
 	netbiosNodeType,  /// NetBIOS node type
+	processorArchitecture, /// Processor architecture type (u16, RFC 4578/5970)
 	zeroLength,       /// Zero-length option (must be "present")
 
 	// Array types (plural naming)

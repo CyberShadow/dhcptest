@@ -39,6 +39,84 @@ enum NETBIOSNodeType : ubyte
 }
 enum NETBIOSNodeTypeChars = "BPMH";
 
+/// Processor Architecture Types (RFC 4578, RFC 5970)
+/// Used in DHCP Option 93 (Client System Architecture Type)
+enum ProcessorArchitecture : ushort
+{
+	x86BiosInt13h = 0,          // x86 BIOS
+	necPC98 = 1,                // NEC/PC98 (DEPRECATED)
+	ia64 = 2,                   // Itanium
+	decAlpha = 3,               // DEC Alpha (DEPRECATED)
+	arcX86 = 4,                 // Arc x86 (DEPRECATED)
+	intelLeanClient = 5,        // Intel Lean Client (DEPRECATED)
+	x86Uefi = 6,                // x86 UEFI
+	x64Uefi = 7,                // x64 UEFI
+	efiXscale = 8,              // EFI Xscale (DEPRECATED)
+	ebc = 9,                    // EFI Byte Code
+	arm32Uefi = 10,             // ARM 32-bit UEFI
+	arm64Uefi = 11,             // ARM 64-bit UEFI
+	powerPCOpenFirmware = 12,   // PowerPC Open Firmware
+	powerPCEpapr = 13,          // PowerPC ePAPR
+	powerOpalV3 = 14,           // POWER OPAL v3
+	x86UefiHttp = 15,           // x86 UEFI HTTP
+	x64UefiHttp = 16,           // x64 UEFI HTTP
+	ebcHttp = 17,               // EBC HTTP
+	arm32UefiHttp = 18,         // ARM 32-bit UEFI HTTP
+	arm64UefiHttp = 19,         // ARM 64-bit UEFI HTTP
+	pcBiosHttp = 20,            // PC BIOS HTTP
+	arm32Uboot = 21,            // ARM 32-bit u-boot
+	arm64Uboot = 22,            // ARM 64-bit u-boot
+	arm32UbootHttp = 23,        // ARM 32-bit u-boot HTTP
+	arm64UbootHttp = 24,        // ARM 64-bit u-boot HTTP
+	riscV32Uefi = 25,           // RISC-V 32-bit UEFI
+	riscV32UefiHttp = 26,       // RISC-V 32-bit UEFI HTTP
+	riscV64Uefi = 27,           // RISC-V 64-bit UEFI
+	riscV64UefiHttp = 28,       // RISC-V 64-bit UEFI HTTP
+	riscV128Uefi = 29,          // RISC-V 128-bit UEFI
+	riscV128UefiHttp = 30,      // RISC-V 128-bit UEFI HTTP
+	s390Basic = 31,             // s390 Basic
+	s390Extended = 32,          // s390 Extended
+	mips32Uefi = 33,            // MIPS 32-bit UEFI
+	mips64Uefi = 34,            // MIPS 64-bit UEFI
+	sunwayUefi = 35,            // Sunway 32-bit UEFI
+	sunway64Uefi = 36,          // Sunway 64-bit UEFI
+	loongArch32Uefi = 37,       // LoongArch 32-bit UEFI
+	loongArch32UefiHttp = 38,   // LoongArch 32-bit UEFI HTTP
+	loongArch64Uefi = 39,       // LoongArch 64-bit UEFI
+	loongArch64UefiHttp = 40,   // LoongArch 64-bit UEFI HTTP
+	armRpiboot = 41,            // ARM rpiboot
+}
+
+/// Format processor architecture type as human-readable string
+string formatProcessorArchitecture(ushort value)
+{
+	// Check if it's a known enum value
+	foreach (member; EnumMembers!ProcessorArchitecture)
+	{
+		if (value == member)
+			return member.to!string;
+	}
+
+	// Unknown value - return numeric representation
+	return value.to!string;
+}
+
+/// Parse processor architecture type from string
+ushort parseProcessorArchitecture(string s)
+{
+	s = s.strip();
+
+	// Try to parse as enum member name
+	foreach (member; EnumMembers!ProcessorArchitecture)
+	{
+		if (s.toLower() == member.to!string.toLower())
+			return member;
+	}
+
+	// Try to parse as numeric value
+	return s.to!ushort;
+}
+
 struct DHCPOptionSpec
 {
 	string name;
@@ -128,6 +206,10 @@ static this()
 		 77 : DHCPOptionSpec("User-Class-Identifier", OptionFormat.str),
 		 80 : DHCPOptionSpec("Rapid Commit", OptionFormat.zeroLength),
 		 82 : DHCPOptionSpec("Relay Agent Information", OptionFormat.relayAgent),
+		 // RFC 4578 / RFC 5970 - Client System Architecture Type
+		 // See IANA Processor Architecture Types registry for full list
+		 // Common values: 0=x86 BIOS, 6=x86 UEFI, 7=x64 UEFI, 10=ARM32 UEFI, 11=ARM64 UEFI
+		 93 : DHCPOptionSpec("Client System Architecture Type", OptionFormat.processorArchitecture),
 		100 : DHCPOptionSpec("PCode", OptionFormat.str),
 		101 : DHCPOptionSpec("TCode", OptionFormat.str),
 		108 : DHCPOptionSpec("IPv6-Only Preferred", OptionFormat.u32),
@@ -154,4 +236,50 @@ DHCPOptionType parseDHCPOptionType(string type)
 		if (!icmp(spec.name, type))
 			return cast(DHCPOptionType)opt;
 	throw new Exception("Unknown DHCP option type: " ~ type);
+}
+
+unittest
+{
+	import dhcptest.formats;
+
+	// Test Option 93 - Client System Architecture Type (RFC 4578/5970)
+	// Displays architecture names instead of numbers for better readability
+
+	assert(dhcpOptions[93].name == "Client System Architecture Type");
+	assert(dhcpOptions[93].format == OptionFormat.processorArchitecture);
+
+	// Test parsing by architecture name - x86 BIOS (Type 0)
+	auto biosx86 = parseOption("x86BiosInt13h", OptionFormat.processorArchitecture);
+	assert(biosx86 == [0x00, 0x00]);
+	assert(formatValue(biosx86, OptionFormat.processorArchitecture) == "x86BiosInt13h");
+
+	// Test parsing by numeric value - x86 UEFI (Type 6)
+	auto efi32 = parseOption("6", OptionFormat.processorArchitecture);
+	assert(efi32 == [0x00, 0x06]);
+	assert(formatValue(efi32, OptionFormat.processorArchitecture) == "x86Uefi");
+
+	// Test parsing by name - x64 UEFI (Type 7)
+	auto efi64 = parseOption("x64Uefi", OptionFormat.processorArchitecture);
+	assert(efi64 == [0x00, 0x07]);
+	assert(formatValue(efi64, OptionFormat.processorArchitecture) == "x64Uefi");
+
+	// Test EBC (Type 9)
+	auto ebc = parseOption("ebc", OptionFormat.processorArchitecture);
+	assert(ebc == [0x00, 0x09]);
+	assert(formatValue(ebc, OptionFormat.processorArchitecture) == "ebc");
+
+	// Test ARM64 UEFI (Type 11) - popular for modern ARM systems
+	auto arm64 = parseOption("arm64Uefi", OptionFormat.processorArchitecture);
+	assert(arm64 == [0x00, 0x0b]);
+	assert(formatValue(arm64, OptionFormat.processorArchitecture) == "arm64Uefi");
+
+	// Test RISC-V 64-bit UEFI (Type 27)
+	auto riscv64 = parseOption("27", OptionFormat.processorArchitecture);
+	assert(riscv64 == [0x00, 0x1b]);
+	assert(formatValue(riscv64, OptionFormat.processorArchitecture) == "riscV64Uefi");
+
+	// Test unknown architecture (e.g., 255) - should return numeric string
+	auto unknown = parseOption("255", OptionFormat.processorArchitecture);
+	assert(unknown == [0x00, 0xFF]);
+	assert(formatValue(unknown, OptionFormat.processorArchitecture) == "255");
 }

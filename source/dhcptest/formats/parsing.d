@@ -112,6 +112,13 @@ struct OptionParser
 				}
 				return [result];
 
+			case OptionFormat.processorArchitecture:
+				auto s = readString(OptionFormat.str);
+				// Parse processor architecture type (by name or number)
+				ushort value = parseProcessorArchitecture(s);
+				// Return as u16 in network byte order (big-endian)
+				return [cast(ubyte)(value >> 8), cast(ubyte)(value & 0xFF)];
+
 			case OptionFormat.zeroLength:
 				auto s = readString(OptionFormat.str);
 				enforce(s == "present", "Zero-length option value must be \"present\"");
@@ -943,6 +950,7 @@ struct OptionParser
 			case OptionFormat.dhcpMessageType:
 			case OptionFormat.dhcpOptionType:
 			case OptionFormat.netbiosNodeType:
+			case OptionFormat.processorArchitecture:
 			case OptionFormat.zeroLength:
 			case OptionFormat.ips:
 			case OptionFormat.u8s:

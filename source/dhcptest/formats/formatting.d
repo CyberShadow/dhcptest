@@ -152,6 +152,13 @@ struct OptionFormatter(Out)
 				formatScalar(result);
 				break;
 
+			case OptionFormat.processorArchitecture:
+				enforce(bytes.length == 2, "processorArchitecture must be 2 bytes");
+				// Parse as u16 in network byte order
+				ushort value = (cast(ushort)bytes[0] << 8) | bytes[1];
+				formatScalar(formatProcessorArchitecture(value));
+				break;
+
 			case OptionFormat.zeroLength:
 				enforce(bytes.length == 0, "Zero-length must be empty");
 				formatScalar("present");
