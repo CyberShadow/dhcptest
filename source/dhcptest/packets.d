@@ -12,6 +12,7 @@ import std.socket;
 import std.string;
 
 import dhcptest.formats;
+import dhcptest.network;
 import dhcptest.options;
 
 version (Windows)
@@ -209,6 +210,7 @@ DHCPPacket generatePacket(
 	uint giaddr,
 	string[] requestedOptions,
 	string[] sentOptions,
+	string target = null,
 	uint xid = uniform!uint())
 {
 	DHCPPacket packet;
@@ -218,7 +220,10 @@ DHCPPacket generatePacket(
 	packet.header.hops = 0;
 	packet.header.xid = xid;
 	packet.header.secs = requestSecs;
-	packet.header.flags = htons(0x8000); // Set BROADCAST flag - required to be able to receive a reply to an imaginary hardware address
+	packet.header.flags = 0;
+	// Set BROADCAST flag when sending to broadcast address (required to receive replies to imaginary hardware addresses)
+	if (target == targetBroadcast)
+		packet.header.flags |= htons(0x8000);
 	packet.header.chaddr[0..mac.length] = mac;
 	packet.header.giaddr = giaddr;
 	if (requestedOptions.length)
@@ -248,6 +253,7 @@ unittest
 		0,   // giaddr
 		[],
 		["12=testhost", "60=vendor123"],
+		targetBroadcast,  // target
 		testXid
 	);
 
@@ -425,6 +431,7 @@ unittest
 		0,   // giaddr
 		[],
 		["12=testhost", "60=vendor123"],
+		targetBroadcast,  // target
 		testXid
 	);
 

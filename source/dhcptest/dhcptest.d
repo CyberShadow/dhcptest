@@ -76,12 +76,13 @@ string[] requestedOptions;
 string[] sentOptions;
 ushort requestSecs = 0;
 uint giaddr;
+string target;
 
 /// Wrapper for generatePacket that uses global state
 DHCPPacket generatePacketFromGlobals(ubyte[] mac)
 {
 	try
-		return dhcptest.packets.generatePacket(mac, requestSecs, giaddr, requestedOptions, sentOptions);
+		return dhcptest.packets.generatePacket(mac, requestSecs, giaddr, requestedOptions, sentOptions, target);
 	catch (Exception e)
 	{
 		stderr.writeln("Error with parsing option: ", e.msg);
@@ -93,7 +94,7 @@ int run(string[] args)
 {
 	string bindAddr = "0.0.0.0";
 	string iface = null;
-	string target = targetBroadcast;
+	target = targetBroadcast;
 	string giaddrStr = "0.0.0.0";
 	ubyte[] defaultMac = 6.iota.map!(i => i == 0 ? ubyte((uniform!ubyte & 0xFC) | 0x02u) : uniform!ubyte).array;
 	bool help, query, wait, raw;
