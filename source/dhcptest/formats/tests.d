@@ -16,6 +16,58 @@ import dhcptest.formats.parsing;
 import dhcptest.formats.formatting;
 
 // ============================================================================
+// Test Helpers
+// ============================================================================
+
+/// Test roundtrip: parse -> format -> parse for all syntax modes
+/// Ensures that parsing and formatting are inverse operations
+/// For JSON syntax, validates that output is valid JSON (except for known exceptions)
+private void testRoundtrip(string input, OptionFormat fmt)
+{
+	import std.traits : EnumMembers;
+	import std.json;
+
+	// Formats that don't produce full-self-contained valid JSON in JSON mode
+	// NOTE: These formats need to be made syntax-aware to properly support JSON mode
+	static immutable OptionFormat[] jsonExceptions = [
+		OptionFormat.option,  // Field assignment without object braces
+	];
+
+	// Parse original input
+	auto bytes1 = parseOption(input, fmt);
+
+	// Test each syntax mode
+	foreach (syntax; [EnumMembers!Syntax])
+	{
+		// Format with this syntax
+		auto formatted = formatValue(bytes1, fmt, null, syntax);
+
+		// Parse formatted output
+		auto bytes2 = parseOption(formatted, fmt);
+
+		// Should produce same bytes
+		assert(bytes1 == bytes2, format("Roundtrip failed for %s with %s syntax: %s -> %s -> %s",
+			fmt, syntax, input, formatted, bytes2));
+
+		// For JSON syntax, validate it's valid JSON (except for known exceptions)
+		if (syntax == Syntax.json && !jsonExceptions.canFind(fmt))
+		{
+			try
+			{
+				// Use strict parsing to detect trailing data
+				auto parsed = parseJSON(formatted, JSONOptions.strictParsing);
+				// Note: We don't check for object type - scalars and arrays are also valid JSON
+			}
+			catch (Exception e)
+			{
+				assert(false, format("Invalid JSON for %s: %s\nOutput: %s\nError: %s",
+					fmt, input, formatted, e.msg));
+			}
+		}
+	}
+}
+
+// ============================================================================
 // Unit Tests
 // ============================================================================
 
@@ -109,25 +161,13 @@ unittest
 
 unittest
 {
-	// Test round-trip
-	void testRoundTrip(string input, OptionFormat type, ubyte[] expected, bool topLevel = true)
-	{
-		auto p = OptionParser(input, topLevel);
-		auto parsed = p.parseValue(type);
-		assert(parsed == expected, format("Parse failed: %s -> %s (expected %s)", input, parsed, expected));
-
-		auto formatted = formatValue(parsed, type);
-		auto p2 = OptionParser(formatted, topLevel);
-		auto reparsed = p2.parseValue(type);
-		assert(reparsed == expected, format("Round-trip failed: %s -> %s -> %s", input, formatted, reparsed));
-	}
-
-	testRoundTrip("42", OptionFormat.u8, [42]);
-	testRoundTrip("[1, 2, 3]", OptionFormat.u8s, [1, 2, 3]);
-	testRoundTrip("192.168.1.1", OptionFormat.ip, [192, 168, 1, 1]);
-	testRoundTrip("DEADBEEF", OptionFormat.hex, [0xDE, 0xAD, 0xBE, 0xEF]);
-	testRoundTrip("true", OptionFormat.boolean, [1]);
-	testRoundTrip("present", OptionFormat.zeroLength, []);
+	// Test round-trip for multiple types (now tests all syntax modes)
+	testRoundtrip("42", OptionFormat.u8);
+	testRoundtrip("[1, 2, 3]", OptionFormat.u8s);
+	testRoundtrip("192.168.1.1", OptionFormat.ip);
+	testRoundtrip("DEADBEEF", OptionFormat.hex);
+	testRoundtrip("true", OptionFormat.boolean);
+	testRoundtrip("present", OptionFormat.zeroLength);
 }
 
 unittest
@@ -161,6 +201,9 @@ unittest
 
 		auto formatted = formatValue(parsed, OptionFormat.classlessStaticRoute);
 		assert(formatted == "192.168.2.0/24 -> 192.168.1.50");
+
+		// Test roundtrip with all syntaxes
+		testRoundtrip("192.168.2.0/24 -> 192.168.1.50", OptionFormat.classlessStaticRoute);
 	}
 }
 
@@ -174,6 +217,9 @@ unittest
 
 		auto formatted = formatValue(parsed, OptionFormat.clientIdentifier);
 		assert(formatted == "type=1, clientIdentifier=AA BB CC DD EE FF");
+
+		// Test roundtrip with all syntaxes (including JSON validation)
+		testRoundtrip("type=1, clientIdentifier=AABBCCDDEEFF", OptionFormat.clientIdentifier);
 	}
 }
 
@@ -505,11 +551,11 @@ unittest
 
 unittest
 {
-	// Test VLList types: relayAgent and vendorSpecificInformation
+	// Test TLV list types: relayAgent and vendorSpecificInformation
 	// Comprehensive tests ported from options.d RelayAgentInformation unittest (lines 256-292)
 	void testRelayAgent(ubyte[] bytes, string str)
 	{
-		// Format bytes to string
+		// Format bytes to string (minimal syntax)
 		auto formatted = formatValue(bytes, OptionFormat.relayAgent);
 		assert(formatted == str, format("Format failed: expected %s, got %s", str, formatted));
 
@@ -518,10 +564,8 @@ unittest
 		auto parsed = p.parseValue(OptionFormat.relayAgent);
 		assert(parsed == bytes, format("Parse failed: expected %s, got %s", bytes, parsed));
 
-		// Round-trip: format → parse → should equal original bytes
-		auto p2 = OptionParser(formatted, true);
-		auto reparsed = p2.parseValue(OptionFormat.relayAgent);
-		assert(reparsed == bytes, format("Round-trip failed: %s", bytes));
+		// Test roundtrip with all syntaxes (including JSON validation)
+		testRoundtrip(str, OptionFormat.relayAgent);
 	}
 
 	// Empty
@@ -554,7 +598,7 @@ unittest
 	// Test vendorSpecificInformation (from formats.d lines 659-661)
 	void testVendor(ubyte[] bytes, string str)
 	{
-		// Format bytes to string
+		// Format bytes to string (minimal syntax)
 		auto formatted = formatValue(bytes, OptionFormat.vendorSpecificInformation);
 		assert(formatted == str, format("Format failed: expected %s, got %s", str, formatted));
 
@@ -563,10 +607,8 @@ unittest
 		auto parsed = p.parseValue(OptionFormat.vendorSpecificInformation);
 		assert(parsed == bytes, format("Parse failed: expected %s, got %s", bytes, parsed));
 
-		// Round-trip
-		auto p2 = OptionParser(formatted, true);
-		auto reparsed = p2.parseValue(OptionFormat.vendorSpecificInformation);
-		assert(reparsed == bytes, format("Round-trip failed: %s", bytes));
+		// Test roundtrip with all syntaxes (including JSON validation)
+		testRoundtrip(str, OptionFormat.vendorSpecificInformation);
 	}
 
 	// Test from formats.d
@@ -723,4 +765,102 @@ unittest
 	assertThrown(parseOption("192.168.1.1extra", OptionFormat.ip));  // Invalid IP format
 	assertThrown(parseOption("42garbage", OptionFormat.u8));  // Invalid number
 	assertThrown(parseOption("true false", OptionFormat.boolean));  // Extra input after boolean
+}
+
+// Test roundtrip with all syntax modes for various types
+unittest
+{
+	// Test various types (now tests both minimal and JSON syntax)
+	testRoundtrip("192.168.1.1", OptionFormat.ip);
+	testRoundtrip("42", OptionFormat.u8);
+	testRoundtrip("true", OptionFormat.boolean);
+	testRoundtrip("false", OptionFormat.boolean);
+	testRoundtrip("3600", OptionFormat.duration);
+	testRoundtrip("testhost", OptionFormat.str);
+	testRoundtrip("DEADBEEF", OptionFormat.hex);
+}
+
+// Test JSON syntax parsing
+unittest
+{
+	// Test JSON-style field separator (:)
+	{
+		auto p = OptionParser(`{"type": 1, "clientIdentifier": "AABBCCDDEE"}`, true);
+		auto bytes = p.parseClientIdentifier();
+		assert(bytes.equal([0x01, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE]));
+	}
+
+	// Test quoted field names
+	{
+		auto p = OptionParser(`{"agentCircuitID": "test"}`, true);
+		auto bytes = p.parseTLVList!RelayAgentSuboption();
+		assert(bytes[0] == 0x01);  // agentCircuitID type
+		assert(bytes[1] == 4);     // length
+		assert(bytes[2..6] == cast(ubyte[])"test");
+	}
+}
+
+// Test which formats produce valid JSON in JSON mode
+unittest
+{
+	import std.json;
+	import std.exception : assertThrown, assertNotThrown;
+
+	// Formats that should produce valid JSON
+	{
+		// Scalar types - produce quoted strings
+		assertNotThrown(parseJSON(formatValue([42], OptionFormat.u8, null, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([1], OptionFormat.boolean, null, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([192, 168, 1, 1], OptionFormat.ip, null, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue(cast(ubyte[])"test", OptionFormat.str, null, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([0xDE, 0xAD], OptionFormat.hex, null, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([3], OptionFormat.dhcpOptionType, null, Syntax.json), JSONOptions.strictParsing));
+
+		// Array types - produce JSON arrays
+		assertNotThrown(parseJSON(formatValue([1, 2, 3], OptionFormat.u8s, null, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([192, 168, 1, 1, 10, 0, 0, 1], OptionFormat.ips, null, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([3, 6], OptionFormat.dhcpOptionTypes, null, Syntax.json), JSONOptions.strictParsing));
+
+		// Struct types - produce JSON objects
+		assertNotThrown(parseJSON(formatValue([0x01, 0xAA, 0xBB], OptionFormat.clientIdentifier, null, Syntax.json), JSONOptions.strictParsing));
+		assertNotThrown(parseJSON(formatValue([0x01, 0x04, 't', 'e', 's', 't'], OptionFormat.relayAgent, null, Syntax.json), JSONOptions.strictParsing));
+
+		// Special types - produce JSON arrays
+		assertNotThrown(parseJSON(formatValue([0x18, 0xc0, 0xa8, 0x02, 0xc0, 0xa8, 0x01, 0x32], OptionFormat.classlessStaticRoute, null, Syntax.json), JSONOptions.strictParsing));
+	}
+
+	// Verify classlessStaticRoute now produces valid JSON
+	{
+		// classlessStaticRoute - now uses array syntax in JSON mode
+		auto routeBytes = cast(ubyte[])[0x18, 0xc0, 0xa8, 0x02, 0xc0, 0xa8, 0x01, 0x32];
+		auto routeMinimal = formatValue(routeBytes, OptionFormat.classlessStaticRoute, cast(string)null, Syntax.minimal);
+		auto routeJson = formatValue(routeBytes, OptionFormat.classlessStaticRoute, cast(string)null, Syntax.json);
+
+		assert(routeMinimal == "192.168.2.0/24 -> 192.168.1.50");
+		assert(routeJson == `[["192.168.2.0/24", "192.168.1.50"]]`);
+
+		// Verify JSON is valid
+		assertNotThrown(parseJSON(routeJson, JSONOptions.strictParsing));
+
+		// Test parsing both formats
+		auto parsedArrow = parseOption("192.168.2.0/24 -> 192.168.1.50", OptionFormat.classlessStaticRoute);
+		auto parsedArray = parseOption(`[["192.168.2.0/24", "192.168.1.50"]]`, OptionFormat.classlessStaticRoute);
+		assert(parsedArrow == routeBytes);
+		assert(parsedArray == routeBytes);
+	}
+
+	// Verify proper output format for dhcpOptionType (now fixed to be syntax-aware)
+	{
+		// dhcpOptionType - now produces valid JSON with unquoted numbers
+		auto optionMinimal = formatValue(cast(ubyte[])[3], OptionFormat.dhcpOptionType, cast(string)null, Syntax.minimal);
+		auto optionJson = formatValue(cast(ubyte[])[3], OptionFormat.dhcpOptionType, cast(string)null, Syntax.json);
+		assert(optionMinimal == "3 (Router Option)");
+		assert(optionJson == "3");
+
+		// dhcpOptionTypes - now produces valid JSON with unquoted numbers
+		auto optionsMinimal = formatValue(cast(ubyte[])[3, 6], OptionFormat.dhcpOptionTypes, cast(string)null, Syntax.minimal);
+		auto optionsJson = formatValue(cast(ubyte[])[3, 6], OptionFormat.dhcpOptionTypes, cast(string)null, Syntax.json);
+		assert(optionsMinimal == "[3 (Router Option), 6 (Domain Name Server Option)]");
+		assert(optionsJson == "[3, 6]");
+	}
 }

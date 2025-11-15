@@ -35,7 +35,8 @@ version (Posix)
 /// Template parameter Out specifies the output sink type (typically an appender)
 struct OptionFormatter(Out)
 {
-	Out output;  /// Output sink
+	Out output;     /// Output sink
+	Syntax syntax;  /// Output syntax style (minimal or json)
 
 	/// Format a value as DSL string to the output sink
 	void formatValue(const ubyte[] bytes, OptionFormat type, string comment = null)
@@ -58,10 +59,20 @@ struct OptionFormatter(Out)
 				break;
 
 			case OptionFormat.hex:
-				// Output hex directly without quoting (maybeAscii handles formatting)
-				output.put(maybeAscii(bytes));
-				if (comment !is null && comment.length > 0)
-					formatComment(comment);
+				final switch (syntax)
+				{
+					case Syntax.json:
+						// JSON mode: hex values must be quoted strings
+						auto hexStr = bytes.map!(b => format("%02X", b)).join(" ");
+						formatScalar(hexStr, comment);
+						break;
+					case Syntax.minimal:
+						// Minimal mode: output hex directly without quoting
+						output.put(maybeAscii(bytes));
+						if (comment !is null && comment.length > 0)
+							formatComment(comment);
+						break;
+				}
 				break;
 
 			case OptionFormat.ip:
@@ -76,28 +87,38 @@ struct OptionFormatter(Out)
 
 			case OptionFormat.u8:
 				enforce(bytes.length == 1, "u8 must be 1 byte");
-				formatScalar(bytes[0].to!string, comment);
+				formatNumber(bytes[0], comment);
 				break;
 
 			case OptionFormat.u16:
 				enforce(bytes.length == 2, "u16 must be 2 bytes");
 				auto value = ntohs(*cast(ushort*)bytes.ptr);
-				formatScalar(value.to!string, comment);
+				formatNumber(value, comment);
 				break;
 
 			case OptionFormat.u32:
 				enforce(bytes.length == 4, "u32 must be 4 bytes");
 				auto value = ntohl(*cast(uint*)bytes.ptr);
-				formatScalar(value.to!string, comment);
+				formatNumber(value, comment);
 				break;
 
 			case OptionFormat.duration:
 				enforce(bytes.length == 4, "time must be 4 bytes");
-				auto value = *cast(uint*)bytes.ptr;  // Keep network byte order for ntime
-				// Output time directly without quoting (ntime handles formatting)
-				output.put(ntime(value));
-				if (comment !is null && comment.length > 0)
-					formatComment(comment);
+				auto value = ntohl(*cast(uint*)bytes.ptr);
+				final switch (syntax)
+				{
+					case Syntax.json:
+						// JSON mode: output as plain number
+						formatNumber(value, comment);
+						break;
+					case Syntax.minimal:
+						// Minimal mode: use ntime for human-readable format
+						auto netValue = *cast(uint*)bytes.ptr;
+						output.put(ntime(netValue));
+						if (comment !is null && comment.length > 0)
+							formatComment(comment);
+						break;
+				}
 				break;
 
 			case OptionFormat.dhcpMessageType:
@@ -107,8 +128,14 @@ struct OptionFormatter(Out)
 
 			case OptionFormat.dhcpOptionType:
 				enforce(bytes.length == 1, "dhcpOptionType must be 1 byte");
-				// Output directly without quoting (formatDHCPOptionType has spaces/parens)
-				output.put(formatDHCPOptionType(cast(DHCPOptionType)bytes[0]));
+				// Format as number with description as comment
+				// In JSON mode: outputs just the number (e.g., 3)
+				// In minimal mode: outputs number with description (e.g., 3 (Router Option))
+				auto optionType = cast(DHCPOptionType)bytes[0];
+				// Get the option name from the table, or use generic name
+				auto spec = dhcpOptions.get(optionType, DHCPOptionSpec.init);
+				string optionName = spec.name.length > 0 ? spec.name : format("Option %d", bytes[0]);
+				formatNumber(bytes[0], optionName);
 				if (comment !is null && comment.length > 0)
 					formatComment(comment);
 				break;
@@ -153,11 +180,36 @@ struct OptionFormatter(Out)
 				break;
 
 			case OptionFormat.classlessStaticRoute:
-				// Format as route strings, e.g., "192.168.2.0/24 -> 192.168.1.50, ..."
 				auto routes = formatClasslessStaticRoute(bytes);
-				output.put(routes.join(", "));
-				if (comment !is null && comment.length > 0)
-					formatComment(comment);
+				final switch (syntax)
+				{
+					case Syntax.json:
+						// JSON mode: format as array of [subnet, router] pairs
+						output.put('[');
+						foreach (i, route; routes)
+						{
+							if (i > 0)
+								output.put(", ");
+							// Split "subnet/mask -> router" into two parts
+							auto parts = route.split(" -> ");
+							enforce(parts.length == 2, "Invalid route format");
+							output.put('[');
+							formatScalar(parts[0]);
+							output.put(", ");
+							formatScalar(parts[1]);
+							output.put(']');
+						}
+						output.put(']');
+						if (comment !is null && comment.length > 0)
+							formatComment(comment);
+						break;
+					case Syntax.minimal:
+						// Minimal mode: use arrow format "subnet/mask -> router, ..."
+						output.put(routes.join(", "));
+						if (comment !is null && comment.length > 0)
+							formatComment(comment);
+						break;
+				}
 				break;
 
 			case OptionFormat.clientIdentifier:
@@ -197,7 +249,8 @@ struct OptionFormatter(Out)
 		}
 	}
 
-	/// Format a field as name=value or name[format]=value
+	/// Format a field as name=value or name[format]=value (minimal)
+	/// or "name": value or "name[format]": value (JSON)
 	/// If formatOverride differs from defaultFormat, include the format in brackets
 	private void formatField(
 		string name,
@@ -205,37 +258,77 @@ struct OptionFormatter(Out)
 		OptionFormat formatUsed,
 		OptionFormat defaultFormat = OptionFormat.unknown)
 	{
-		output.put(name);
-
-		// Show format override if it differs from default
-		if (defaultFormat != OptionFormat.unknown && formatUsed != defaultFormat)
+		// Format field name
+		final switch (syntax)
 		{
-			output.put('[');
-			output.put(formatUsed.to!string);
-			output.put(']');
+			case Syntax.json:
+				// JSON mode: quoted field name
+				output.put('"');
+				output.put(name);
+				// Show format override in the quoted name
+				if (defaultFormat != OptionFormat.unknown && formatUsed != defaultFormat)
+				{
+					output.put('[');
+					output.put(formatUsed.to!string);
+					output.put(']');
+				}
+				output.put('"');
+				output.put(':');
+				output.put(' ');
+				break;
+			case Syntax.minimal:
+				// Minimal mode: unquoted field name
+				output.put(name);
+				// Show format override after the name
+				if (defaultFormat != OptionFormat.unknown && formatUsed != defaultFormat)
+				{
+					output.put('[');
+					output.put(formatUsed.to!string);
+					output.put(']');
+				}
+				output.put('=');
+				break;
 		}
 
-		output.put('=');
 		formatValue(value, formatUsed);
+	}
+
+	/// Format a numeric value (unquoted in both syntaxes)
+	private void formatNumber(T : ulong)(T value, string comment = null)
+	{
+		output.put(value.to!string);
+
+		// Add comment if present (not used in JSON mode)
+		if (comment !is null && comment.length > 0)
+			formatComment(comment);
 	}
 
 	/// Format a scalar string value for DSL output
 	private void formatScalar(string value, string comment = null)
 	{
-		// Check if value needs quoting
-		bool needsQuoting = value.length == 0;
-
-		if (!needsQuoting)
+		bool needsQuoting;
+		final switch (syntax)
 		{
-			foreach (ch; value)
-			{
-				// Need quoting if special char, whitespace, or non-printable
-				if (isSpecialChar(ch) || isWhitespace(ch) || ch < 0x20 || ch > 0x7E)
+			case Syntax.json:
+				// JSON mode: all string values must be quoted
+				needsQuoting = true;
+				break;
+			case Syntax.minimal:
+				// Minimal mode: only quote if necessary
+				needsQuoting = value.length == 0;
+				if (!needsQuoting)
 				{
-					needsQuoting = true;
-					break;
+					foreach (ch; value)
+					{
+						// Need quoting if special char, whitespace, or non-printable
+						if (isSpecialChar(ch) || isWhitespace(ch) || ch < 0x20 || ch > 0x7E)
+						{
+							needsQuoting = true;
+							break;
+						}
+					}
 				}
-			}
+				break;
 		}
 
 		if (needsQuoting)
@@ -249,7 +342,7 @@ struct OptionFormatter(Out)
 			output.put(value);
 		}
 
-		// Add comment if present
+		// Add comment if present (not used in JSON mode)
 		if (comment !is null && comment.length > 0)
 			formatComment(comment);
 	}
@@ -278,17 +371,27 @@ struct OptionFormatter(Out)
 	}
 
 	/// Format a comment: (text)
+	/// In JSON mode, comments are not output (no-op)
 	private void formatComment(string comment)
 	{
-		output.put(' ');
-		output.put('(');
-		foreach (ch; comment)
+		final switch (syntax)
 		{
-			if (ch == ')')
-				output.put('\\');
-			output.put(ch);
+			case Syntax.json:
+				// Comments are not part of JSON - no-op
+				return;
+			case Syntax.minimal:
+				// Minimal mode: output comment as (text)
+				output.put(' ');
+				output.put('(');
+				foreach (ch; comment)
+				{
+					if (ch == ')')
+						output.put('\\');
+					output.put(ch);
+				}
+				output.put(')');
+				break;
 		}
-		output.put(')');
 	}
 
 	/// Format an escaped string to output (for use within quotes)
@@ -300,17 +403,40 @@ struct OptionFormatter(Out)
 			{
 				case '\\': output.put(`\\`); break;
 				case '"':  output.put(`\"`); break;
-				case '\0': output.put(`\0`); break;
 				case '\n': output.put(`\n`); break;
 				case '\r': output.put(`\r`); break;
 				case '\t': output.put(`\t`); break;
+				case '\0':
+					final switch (syntax)
+					{
+						case Syntax.json:
+							// JSON doesn't support \0, use \u0000
+							output.put(`\u0000`);
+							break;
+						case Syntax.minimal:
+							output.put(`\0`);
+							break;
+					}
+					break;
 				default:
 					// For printable ASCII, use as-is
 					if (c >= 0x20 && c <= 0x7E)
 						output.put(c);
 					else
-						// For non-printable bytes, use hex escape
-						formattedWrite(output, `\x%02X`, cast(ubyte)c);
+					{
+						// For non-printable bytes
+						final switch (syntax)
+						{
+							case Syntax.json:
+								// JSON requires Unicode escapes
+								formattedWrite(output, `\u%04X`, cast(ubyte)c);
+								break;
+							case Syntax.minimal:
+								// Minimal mode uses hex escapes
+								formattedWrite(output, `\x%02X`, cast(ubyte)c);
+								break;
+						}
+					}
 					break;
 			}
 		}
@@ -337,8 +463,21 @@ struct OptionFormatter(Out)
 		scope OptionFormat delegate(string name) getFieldFormat)
 	{
 		auto fields = extractFields(bytes);
-		bool first = true;
 
+		// Output opening delimiter
+		final switch (syntax)
+		{
+			case Syntax.json:
+				output.put('{');
+				if (fields.length > 0)
+					output.put(' ');
+				break;
+			case Syntax.minimal:
+				// No opening delimiter in minimal mode
+				break;
+		}
+
+		bool first = true;
 		foreach (name, valueBytes; fields)
 		{
 			if (!first)
@@ -347,6 +486,19 @@ struct OptionFormatter(Out)
 
 			auto fieldFormat = getFieldFormat(name);
 			formatField(name, valueBytes, fieldFormat);
+		}
+
+		// Output closing delimiter
+		final switch (syntax)
+		{
+			case Syntax.json:
+				if (fields.length > 0)
+					output.put(' ');
+				output.put('}');
+				break;
+			case Syntax.minimal:
+				// No closing delimiter in minimal mode
+				break;
 		}
 	}
 
@@ -442,10 +594,10 @@ struct OptionFormatter(Out)
 // ============================================================================
 
 /// Format a value as DSL string (convenience wrapper)
-string formatValue(const ubyte[] bytes, OptionFormat type, string comment = null)
+string formatValue(const ubyte[] bytes, OptionFormat type, string comment = null, Syntax syntax = Syntax.minimal)
 {
 	auto buf = appender!string;
-	auto formatter = OptionFormatter!(typeof(buf))(buf);
+	auto formatter = OptionFormatter!(typeof(buf))(buf, syntax);
 	formatter.formatValue(bytes, type, comment);
 	return buf.data;
 }

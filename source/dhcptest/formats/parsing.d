@@ -138,8 +138,51 @@ struct OptionParser
 
 			// Struct types - use fullString at top level to consume entire input
 			case OptionFormat.classlessStaticRoute:
-				auto s = readString(atTopLevel ? OptionFormat.fullString : OptionFormat.str);
-				return parseClasslessStaticRoute(s);
+				// Support two formats:
+				// 1. Arrow format: "192.168.2.0/24 -> 192.168.1.50"
+				// 2. Array format: [["192.168.2.0/24", "192.168.1.50"], ...]
+				skipWhitespace();
+				if (!atEnd && peek() == '[')
+				{
+					// Array format - array of [subnet, router] pairs
+					consume(); // outer '['
+					skipWhitespace();
+
+					ubyte[] result;
+					bool first = true;
+					while (!atEnd && peek() != ']')
+					{
+						if (!first)
+						{
+							expect(',');
+							skipWhitespace();
+						}
+						first = false;
+
+						// Parse a single route: ["subnet", "router"]
+						expect('[');
+						skipWhitespace();
+						auto subnet = readString(OptionFormat.str);
+						skipWhitespace();
+						expect(',');
+						skipWhitespace();
+						auto router = readString(OptionFormat.str);
+						skipWhitespace();
+						expect(']');
+
+						// Append this route to result
+						result ~= parseClasslessStaticRoute(subnet ~ " -> " ~ router);
+						skipWhitespace();
+					}
+					expect(']'); // outer ']'
+					return result;
+				}
+				else
+				{
+					// Arrow format (legacy)
+					auto s = readString(atTopLevel ? OptionFormat.fullString : OptionFormat.str);
+					return parseClasslessStaticRoute(s);
+				}
 
 			case OptionFormat.clientIdentifier:
 				return parseClientIdentifier();
@@ -414,23 +457,38 @@ struct OptionParser
 	}
 
 	/// Parse field name with optional format override: name or name[format]
+	/// JSON mode: "name" or "name[format]" (quoted, no separate format override)
 	/// Returns: tuple of (field name, format if specified, null otherwise)
 	auto parseFieldSpec()
 	{
 		import std.typecons : tuple, Nullable;
 
-		// Parse field name
-		auto nameStart = pos;
-		while (!atEnd && !isSpecialChar(peek()) && !isWhitespace(peek()))
-			consume();
-		string name = input[nameStart .. pos];
-		enforce(name.length > 0, "Expected field name");
+		string name;
+		bool isQuoted = false;
+
+		// Parse field name - either quoted or unquoted
+		if (!atEnd && peek() == '"')
+		{
+			// Quoted field name (JSON style) - includes everything in quotes
+			name = readQuoted();
+			isQuoted = true;
+		}
+		else
+		{
+			// Unquoted field name (DSL style) - stops at special chars
+			auto nameStart = pos;
+			while (!atEnd && !isSpecialChar(peek()) && !isWhitespace(peek()))
+				consume();
+			name = input[nameStart .. pos];
+			enforce(name.length > 0, "Expected field name");
+		}
 
 		skipWhitespace();
 
 		// Optional format override: field[format]
+		// Only available for unquoted field names
 		Nullable!OptionFormat formatOverride;
-		if (tryConsume('['))
+		if (!isQuoted && tryConsume('['))
 		{
 			auto fmtStart = pos;
 			while (!atEnd && peek() != ']')
@@ -461,7 +519,9 @@ struct OptionParser
 			? getDefaultFieldFormat(name)
 			: formatOverride.get;
 
-		expect('=');
+		// Accept both = (DSL) and : (JSON) as field separators
+		if (!tryConsume('=') && !tryConsume(':'))
+			throw new Exception(format("Expected '=' or ':' at position %d", pos));
 		skipWhitespace();
 
 		// Parse value according to field format
@@ -471,36 +531,42 @@ struct OptionParser
 	}
 
 	/// Parse a struct/map-like value with field=value pairs
-	/// Supports both bracketed [field=value, field2=value2] and unbracketed (top-level) syntax
+	/// Supports: [field=value], {field:value}, or top-level field=value
 	/// getDefaultFieldFormat: determines the format for each field by name
 	/// finalize: converts the parsed field map to final bytes
 	ubyte[] parseStruct(
 		scope OptionFormat delegate(string name) getDefaultFieldFormat,
 		scope ubyte[] delegate(ubyte[][string] fields) finalize)
 	{
-		bool hasBracket = false;
+		char delimiter = '\0';  // '\0' = none, '[' = bracket, '{' = brace
 		skipWhitespace();
 
-		// Brackets optional at top level
+		// Delimiters optional at top level
 		if (atTopLevel)
 		{
-			if (!atEnd && peek() == '[')
+			if (!atEnd && (peek() == '[' || peek() == '{'))
 			{
-				hasBracket = true;
-				consume();
+				delimiter = consume();
 			}
 		}
 		else
 		{
-			expect('[');
-			hasBracket = true;
+			// Embedded structs require delimiters
+			if (!atEnd && (peek() == '[' || peek() == '{'))
+				delimiter = consume();
+			else
+				expect('[');  // Default to expecting bracket for error message
 		}
 
 		skipWhitespace();
 
 		// Empty struct
-		if (hasBracket && tryConsume(']'))
-			return finalize(null);
+		if (delimiter != '\0')
+		{
+			char closingDelimiter = (delimiter == '[') ? ']' : '}';
+			if (tryConsume(closingDelimiter))
+				return finalize(null);
+		}
 
 		ubyte[][string] fields;
 
@@ -513,9 +579,13 @@ struct OptionParser
 			skipWhitespace();
 
 			// Check for end before trying to parse field name
-			if (hasBracket && !atEnd && peek() == ']')
-				break;
-			if (!hasBracket && atEnd)
+			if (delimiter != '\0')
+			{
+				char closingDelimiter = (delimiter == '[') ? ']' : '}';
+				if (!atEnd && peek() == closingDelimiter)
+					break;
+			}
+			else if (atEnd)
 				break;
 
 			// Parse single field using parseField helper
@@ -534,14 +604,15 @@ struct OptionParser
 			skipWhitespace();
 
 			// Check for end or comma
-			if (hasBracket)
+			if (delimiter != '\0')
 			{
-				if (tryConsume(']'))
+				char closingDelimiter = (delimiter == '[') ? ']' : '}';
+				if (tryConsume(closingDelimiter))
 					break;
 			}
 			else
 			{
-				// At top level without brackets, stop at end of input
+				// At top level without delimiters, stop at end of input
 				if (atEnd)
 					break;
 			}
@@ -549,8 +620,8 @@ struct OptionParser
 			// Expect comma between fields
 			if (!tryConsume(','))
 			{
-				if (hasBracket)
-					expect(',');  // In brackets, comma is required
+				if (delimiter != '\0')
+					expect(',');  // With delimiters, comma is required
 				else
 					break;  // At top level, comma is optional
 			}
@@ -558,8 +629,12 @@ struct OptionParser
 			skipWhitespace();
 
 			// Check for trailing comma
-			if (hasBracket && tryConsume(']'))
-				break;
+			if (delimiter != '\0')
+			{
+				char closingDelimiter = (delimiter == '[') ? ']' : '}';
+				if (tryConsume(closingDelimiter))
+					break;
+			}
 		}
 
 		return finalize(fields);
@@ -680,7 +755,7 @@ struct OptionParser
 	/// Check if character is a special character (needs escaping in unquoted strings)
 	private static bool isSpecialChar(char ch)
 	{
-		return ch == '=' || ch == '[' || ch == ']' || ch == ',' || ch == '"' || ch == '\\';
+		return ch == '=' || ch == ':' || ch == '[' || ch == ']' || ch == '{' || ch == '}' || ch == ',' || ch == '"' || ch == '\\';
 	}
 
 	/// Parse an escape sequence, return the unescaped character
@@ -716,6 +791,15 @@ struct OptionParser
 				auto hexDigits = input[pos .. pos + 2];
 				pos += 2;
 				return cast(char)hexDigits.to!ubyte(16);
+			case 'u':
+				// Unicode escape: \uXXXX (JSON-style)
+				enforce(pos + 3 < input.length, "Incomplete unicode escape sequence");
+				auto unicodeDigits = input[pos .. pos + 4];
+				pos += 4;
+				auto codepoint = unicodeDigits.to!ushort(16);
+				// For ASCII range, return as char
+				enforce(codepoint <= 0xFF, "Unicode escapes beyond \\u00FF not supported");
+				return cast(char)codepoint;
 			default:
 				throw new Exception(format("Invalid escape sequence '\\%s' at position %d", ch, pos - 1));
 		}
@@ -921,6 +1005,11 @@ ubyte[] parseOption(string value, OptionFormat fmt)
 {
 	auto parser = OptionParser(value, true);  // atTopLevel=true
 	auto result = parser.parseValue(fmt);
+
+	// Skip optional trailing comment
+	if (parser.peekComment())
+		parser.skipComment();
+
 	enforce(parser.pos == parser.input.length,
 		format("Unexpected trailing input at position %d: '%s'", parser.pos, parser.input[parser.pos..$]));
 	return result;

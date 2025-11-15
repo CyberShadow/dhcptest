@@ -78,6 +78,13 @@ enum OptionFormat
 	time = duration,  /// Deprecated: use 'duration' instead
 }
 
+/// Output syntax style for formatting
+enum Syntax
+{
+	minimal,  /// Minimal DSL syntax: [field=value], unquoted names
+	json,     /// JSON syntax: {"field": value}, quoted names
+}
+
 // ============================================================================
 // Relay Agent Information and Vendor-Specific Information
 // ============================================================================
