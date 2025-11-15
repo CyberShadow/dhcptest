@@ -15,6 +15,7 @@ import std.range;
 import std.string;
 
 import dhcptest.formats.types;
+import dhcptest.options : DHCPOptionType, formatDHCPOptionType, dhcpOptions, DHCPOptionSpec;
 
 // Import network byte order functions
 version (Windows)
@@ -174,6 +175,22 @@ struct OptionFormatter(Out)
 
 			case OptionFormat.vendorSpecificInformation:
 				formatTLVList!VendorSpecificSuboption(bytes);
+				if (comment !is null && comment.length > 0)
+					formatComment(comment);
+				break;
+
+			case OptionFormat.option:
+				// Decode: [optionType][value...]
+				enforce(bytes.length >= 1, "Option must have at least 1 byte (type)");
+				auto opt = cast(DHCPOptionType)bytes[0];
+				auto valueBytes = bytes[1 .. $];
+
+				// Get default format for this option
+				auto defaultFmt = dhcpOptions.get(opt, DHCPOptionSpec.init).format;
+
+				// Format as field: optionName=value
+				formatField(formatDHCPOptionType(opt), valueBytes, defaultFmt);
+
 				if (comment !is null && comment.length > 0)
 					formatComment(comment);
 				break;

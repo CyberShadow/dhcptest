@@ -208,14 +208,15 @@ DHCPPacket generatePacket(
 	ushort requestSecs,
 	uint giaddr,
 	string[] requestedOptions,
-	string[] sentOptions)
+	string[] sentOptions,
+	uint xid = uniform!uint())
 {
 	DHCPPacket packet;
 	packet.header.op = 1; // BOOTREQUEST
 	packet.header.htype = 1;
 	packet.header.hlen = mac.length.to!ubyte;
 	packet.header.hops = 0;
-	packet.header.xid = uniform!uint();
+	packet.header.xid = xid;
 	packet.header.secs = requestSecs;
 	packet.header.flags = htons(0x8000); // Set BROADCAST flag - required to be able to receive a reply to an imaginary hardware address
 	packet.header.chaddr[0..mac.length] = mac;
@@ -224,26 +225,48 @@ DHCPPacket generatePacket(
 		packet.options ~= DHCPOption(DHCPOptionType.parameterRequestList, cast(ubyte[])requestedOptions.map!parseDHCPOptionType.array);
 	foreach (option; sentOptions)
 	{
-		auto s = option.findSplit("=");
-		string numStr = s[0];
-		string value = s[2];
-		string fmtStr;
-		if (numStr.endsWith("]"))
-		{
-			auto numParts = numStr.findSplit("[");
-			fmtStr = numParts[2][0..$-1];
-			numStr = numParts[0];
-		}
-		auto opt = parseDHCPOptionType(numStr);
-		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.unknown;
-		if (fmt == OptionFormat.unknown)
-			fmt = dhcpOptions.get(opt, DHCPOptionSpec.init).format;
-		ubyte[] bytes = parseOption(value, fmt);
+		// Parse "optionName[format]=value" using OptionFormat.option
+		// Encoding: [DHCPOptionType byte][value bytes...]
+		auto parsedOption = parseOption(option, OptionFormat.option);
+		auto opt = cast(DHCPOptionType)parsedOption[0];
+		auto bytes = parsedOption[1 .. $];
 		packet.options ~= DHCPOption(opt, bytes);
 	}
 	if (packet.options.all!(option => option.type != DHCPOptionType.dhcpMessageType))
 		packet.options = DHCPOption(DHCPOptionType.dhcpMessageType, [DHCPMessageType.discover]) ~ packet.options;
 	return packet;
+}
+
+unittest
+{
+	auto mac = cast(ubyte[])[0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF];
+	uint testXid = 0x12345678;
+
+	auto packet = generatePacket(
+		mac,
+		10,  // requestSecs
+		0,   // giaddr
+		[],
+		["12=testhost", "60=vendor123"],
+		testXid
+	);
+
+	DHCPPacket expected;
+	expected.header.op = 1;  // BOOTREQUEST
+	expected.header.htype = 1;
+	expected.header.hlen = 6;
+	expected.header.hops = 0;
+	expected.header.xid = 0x12345678;
+	expected.header.secs = 10;
+	expected.header.flags = htons(0x8000);
+	expected.header.chaddr[0..6] = mac;
+	expected.options = [
+		DHCPOption(53, [1]),  // dhcpMessageType: discover
+		DHCPOption(12, [116, 101, 115, 116, 104, 111, 115, 116]),  // hostname: testhost
+		DHCPOption(60, [118, 101, 110, 100, 111, 114, 49, 50, 51]),  // vendor: vendor123
+	];
+
+	assert(packet == expected);
 }
 
 /// Calculate IP checksum
@@ -331,19 +354,19 @@ string formatPacket(
 	// If printing only a specific option
 	if (printOnlyOption != null && printOnlyOption.length > 0)
 	{
-		string numStr = printOnlyOption;
-		string fmtStr = "";
-		if (numStr.endsWith("]"))
-		{
-			auto numParts = printOnlyOption.findSplit("[");
-			fmtStr = numParts[2][0..$-1];
-			numStr = numParts[0];
-		}
-		auto opt = parseDHCPOptionType(numStr);
+		// Parse "optionName[format]" to get the option type and format
+		auto parser = OptionParser(printOnlyOption, true);
+		auto spec = parser.parseFieldSpec();
 
-		OptionFormat fmt = fmtStr.length ? fmtStr.to!OptionFormat : OptionFormat.unknown;
-		if (fmt == OptionFormat.unknown)
-			fmt = dhcpOptions.get(opt, DHCPOptionSpec.init).format;
+		string optionName = spec[0];
+		auto formatOverride = spec[1];
+
+		auto opt = parseDHCPOptionType(optionName);
+
+		// Use format override if specified, otherwise use default for this option
+		OptionFormat fmt = formatOverride.isNull
+			? dhcpOptions.get(opt, DHCPOptionSpec.init).format
+			: formatOverride.get;
 
 		foreach (option; packet.options)
 		{
@@ -388,4 +411,30 @@ string formatPacket(
 	}
 
 	return output.data;
+}
+
+unittest
+{
+	auto mac = cast(ubyte[])[0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF];
+	uint testXid = 0x12345678;
+
+	auto packet = generatePacket(
+		mac,
+		10,  // requestSecs
+		0,   // giaddr
+		[],
+		["12=testhost", "60=vendor123"],
+		testXid
+	);
+
+	auto formatted = formatPacket(packet);
+
+	assert(formatted == q"EOF
+  op=BOOTREQUEST chaddr=AA:BB:CC:DD:EE:FF hops=0 xid=78563412 secs=2560 flags=8000
+  ciaddr=0.0.0.0 yiaddr=0.0.0.0 siaddr=0.0.0.0 giaddr=0.0.0.0 sname= file=
+  3 options:
+     53 (DHCP Message Type): discover
+     12 (Host Name Option): testhost
+     60 (Vendor class identifier): vendor123
+EOF");
 }

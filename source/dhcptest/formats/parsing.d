@@ -16,6 +16,7 @@ import std.range;
 import std.string;
 
 import dhcptest.formats.types;
+import dhcptest.options : DHCPOptionType, parseDHCPOptionType, dhcpOptions, DHCPOptionSpec;
 
 // Import network byte order functions
 version (Windows)
@@ -142,6 +143,25 @@ struct OptionParser
 
 			case OptionFormat.clientIdentifier:
 				return parseClientIdentifier();
+
+			case OptionFormat.option:
+				// Parse DHCP option specification: name[format]=value
+				// Encoding: [optionType][value...]
+				auto parsed = parseField((name) {
+					// Get default format for this option
+					auto opt = parseDHCPOptionType(name);
+					return dhcpOptions.get(opt, DHCPOptionSpec.init).format;
+				});
+				string fieldName = parsed[0];
+				// OptionFormat fieldFormat = parsed[1];  // Format already applied during parsing
+				ubyte[] value = parsed[2];
+
+				// Convert option name to type and encode
+				auto opt = parseDHCPOptionType(fieldName);
+				ubyte[] result;
+				result ~= cast(ubyte)opt;
+				result ~= value;
+				return result;
 
 			case OptionFormat.relayAgent:
 				return parseTLVList!RelayAgentSuboption();
@@ -850,6 +870,7 @@ struct OptionParser
 			case OptionFormat.vendorSpecificInformation:
 			case OptionFormat.classlessStaticRoute:
 			case OptionFormat.clientIdentifier:
+			case OptionFormat.option:
 				throw new Exception("readString called with non-string type");
 		}
 	}

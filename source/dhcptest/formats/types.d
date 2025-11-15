@@ -70,6 +70,7 @@ enum OptionFormat
 	vendorSpecificInformation, /// Vendor-specific information
 	classlessStaticRoute,      /// Classless static routes (RFC 3442)
 	clientIdentifier, /// Client identifier (type + data)
+	option,           /// DHCP option specification: name[format]=value
 
 	// Backwards compatibility aliases (deprecated)
 	IP = ip,          /// Deprecated: use 'ip' instead
