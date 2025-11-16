@@ -38,6 +38,7 @@ struct OptionFormatter(Out)
 {
 	Out output;     /// Output sink
 	Syntax syntax;  /// Output syntax style (minimal or json)
+	void delegate(string) onWarning; /// Optional callback for formatting warnings
 
 	/// Format a value as DSL string to the output sink
 	void formatValue(const ubyte[] bytes, OptionFormat type)
@@ -268,56 +269,71 @@ struct OptionFormatter(Out)
 	/// Format a field as name=value or name[format]=value (minimal)
 	/// or "name": value or "name[format]": value (JSON)
 	/// If formatOverride differs from defaultFormat, include the format in brackets
+	/// If formatting fails, falls back to hex format and emits a warning
 	private void formatField(
 		string name,
 		const(ubyte)[] value,
 		OptionFormat formatUsed,
 		OptionFormat defaultFormat = OptionFormat.unknown)
 	{
-		// Format field name
-		final switch (syntax)
+		// Try to format the value, fall back to hex on error
+		try
 		{
-			case Syntax.json:
-				// JSON mode: quoted field name
-				output.put('"');
-				output.put(name);
-				// Show format override in the quoted name
-				if (defaultFormat != OptionFormat.unknown && formatUsed != defaultFormat)
-				{
-					output.put('[');
-					output.put(formatUsed.to!string);
-					output.put(']');
-				}
-				output.put('"');
-				output.put(':');
-				output.put(' ');
-				break;
-			case Syntax.plain:
-				// Plain mode: unquoted like verbose
-				output.put(name);
-				if (defaultFormat != OptionFormat.unknown && formatUsed != defaultFormat)
-				{
-					output.put('[');
-					output.put(formatUsed.to!string);
-					output.put(']');
-				}
-				output.put('=');
-				break;
-			case Syntax.verbose:
-				// Verbose mode: unquoted field name
-				output.put(name);
-				// Show format override after the name
-				if (defaultFormat != OptionFormat.unknown && formatUsed != defaultFormat)
-				{
-					output.put('[');
-					output.put(formatUsed.to!string);
-					output.put(']');
-				}
-				output.put('=');
-				break;
-		}
+			// Format field name
+			final switch (syntax)
+			{
+				case Syntax.json:
+					// JSON mode: quoted field name
+					output.put('"');
+					output.put(name);
+					// Show format override in the quoted name
+					if (defaultFormat != OptionFormat.unknown && formatUsed != defaultFormat)
+					{
+						output.put('[');
+						output.put(formatUsed.to!string);
+						output.put(']');
+					}
+					output.put('"');
+					output.put(':');
+					output.put(' ');
+					break;
+				case Syntax.plain:
+					// Plain mode: unquoted like verbose
+					output.put(name);
+					if (defaultFormat != OptionFormat.unknown && formatUsed != defaultFormat)
+					{
+						output.put('[');
+						output.put(formatUsed.to!string);
+						output.put(']');
+					}
+					output.put('=');
+					break;
+				case Syntax.verbose:
+					// Verbose mode: unquoted field name
+					output.put(name);
+					// Show format override after the name
+					if (defaultFormat != OptionFormat.unknown && formatUsed != defaultFormat)
+					{
+						output.put('[');
+						output.put(formatUsed.to!string);
+						output.put(']');
+					}
+					output.put('=');
+					break;
+			}
 
-		formatValue(value, formatUsed);
+			formatValue(value, formatUsed);
+		}
+		catch (Exception e)
+		{
+			// Emit warning if callback is set
+			if (onWarning)
+				onWarning(format("Error formatting field '%s' as %s: %s (falling back to hex)",
+					name, formatUsed, e.msg));
+
+			// Fall back to hex format (never throws)
+			formatField(name, value, OptionFormat.hex, defaultFormat);
+		}
 	}
 
 	/// Format a numeric value (unquoted in both syntaxes)
@@ -744,10 +760,14 @@ struct OptionFormatter(Out)
 // ============================================================================
 
 /// Format a value as DSL string (convenience wrapper)
-string formatValue(const ubyte[] bytes, OptionFormat type, Syntax syntax = Syntax.verbose)
+string formatValue(
+	const ubyte[] bytes,
+	OptionFormat type,
+	Syntax syntax = Syntax.verbose,
+	void delegate(string) onWarning = null)
 {
 	auto buf = appender!string;
-	auto formatter = OptionFormatter!(typeof(buf))(buf, syntax);
+	auto formatter = OptionFormatter!(typeof(buf))(buf, syntax, onWarning);
 	formatter.formatValue(bytes, type);
 	return buf.data;
 }
@@ -761,7 +781,7 @@ string formatValue(const ubyte[] bytes, OptionFormat type, Syntax syntax = Synta
 alias formatOption = formatValue;
 
 /// Format option value to string without comment (machine-readable plain format)
-string formatRawOption(in ubyte[] bytes, OptionFormat fmt)
+string formatRawOption(in ubyte[] bytes, OptionFormat fmt, void delegate(string) onWarning = null)
 {
-	return formatValue(bytes, fmt, Syntax.plain);
+	return formatValue(bytes, fmt, Syntax.plain, onWarning);
 }

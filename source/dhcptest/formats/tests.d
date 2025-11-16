@@ -859,3 +859,127 @@ unittest
 		assert(optionsJson == "[3, 6]");
 	}
 }
+
+// ============================================================================
+// Error Handling Tests
+// ============================================================================
+
+/// Test graceful error handling with hex fallback
+unittest
+{
+	import std.array : appender;
+	import std.string : indexOf;
+
+	// Test 1: formatValue (standalone) should throw on malformed data
+	{
+		// 5 bytes for IP array (not divisible by 4)
+		ubyte[] badIPArray = [192, 168, 1, 1, 5];
+		assertThrown!Exception(formatValue(badIPArray, OptionFormat.ips));
+
+		// 3 bytes for single IP (should be 4)
+		ubyte[] badIP = [192, 168, 1];
+		assertThrown!Exception(formatValue(badIP, OptionFormat.ip));
+
+		// 3 bytes for u16 array (not divisible by 2)
+		ubyte[] badU16Array = [0x00, 0x01, 0x02];
+		assertThrown!Exception(formatValue(badU16Array, OptionFormat.u16s));
+	}
+
+	// Test 2: formatValue with warning callback should throw (but can report via callback)
+	{
+		bool warningCalled = false;
+		void warningHandler(string msg) { warningCalled = true; }
+
+		ubyte[] badIPArray = [192, 168, 1, 1, 5];
+
+		// Should still throw even with warning callback
+		assertThrown!Exception(formatValue(badIPArray, OptionFormat.ips, Syntax.verbose, &warningHandler));
+
+		// Warning callback not invoked for top-level formatValue failures
+		assert(!warningCalled);
+	}
+
+	// Test 3: OptionFormatter with formatField should fall back to hex
+	{
+		import dhcptest.formats.formatting : OptionFormatter;
+
+		bool warningCalled = false;
+		string warningMsg;
+		void warningHandler(string msg)
+		{
+			warningCalled = true;
+			warningMsg = msg;
+		}
+
+		auto buf = appender!string;
+		auto formatter = OptionFormatter!(typeof(buf))(buf, Syntax.verbose, &warningHandler);
+
+		// Create a malformed struct-like value with a bad IP field
+		// We'll use the internal formatField method behavior through TLV formatting
+		// For now, just verify that hex fallback works through the public API
+
+		// This will be tested more thoroughly through packet formatting tests
+	}
+
+	// Test 4: Verify hex format never throws (safety net)
+	{
+		// Empty data
+		assert(formatValue([], OptionFormat.hex) == "");
+
+		// Any random bytes should format as hex
+		ubyte[] randomBytes = [0xDE, 0xAD, 0xBE, 0xEF, 0x12, 0x34];
+		auto hexStr = formatValue(randomBytes, OptionFormat.hex);
+		assert(hexStr == "DE AD BE EF 12 34");
+
+		// Even "malformed" data for other formats works fine as hex
+		ubyte[] badIPArray = [192, 168, 1, 1, 5];
+		hexStr = formatValue(badIPArray, OptionFormat.hex);
+		assert(hexStr == "C0 A8 01 01 05");
+	}
+
+	// Test 5: Packet formatting with malformed options
+	{
+		import dhcptest.packets : DHCPPacket, DHCPOption, formatPacket;
+
+		bool warningCalled = false;
+		string[] warnings;
+		void warningHandler(string msg)
+		{
+			warningCalled = true;
+			warnings ~= msg;
+		}
+
+		DHCPPacket packet;
+		packet.header.op = 2; // BOOTREPLY
+		packet.header.xid = 0x12345678;
+
+		// Add malformed option (5 bytes for an IP, which needs 4)
+		packet.options ~= DHCPOption(1, [255, 255, 255, 0, 1]); // Subnet mask with extra byte
+
+		// Add valid option
+		packet.options ~= DHCPOption(3, [192, 168, 1, 1]); // Router - valid
+
+		auto packetStr = formatPacket(packet, null, &warningHandler);
+
+		// Should have emitted a warning
+		assert(warningCalled, "Should have emitted warning for malformed option");
+		assert(warnings.length > 0, "Should have at least one warning");
+
+		// Warning should mention the error
+		assert(warnings[0].indexOf("IP address must be 4 bytes") >= 0,
+			"Warning should mention the specific error");
+
+		// Packet should contain both options
+		assert(packetStr.indexOf("1") >= 0, "Should contain option 1");
+		assert(packetStr.indexOf("3") >= 0, "Should contain option 3");
+
+		// Malformed option should have [hex] annotation
+		assert(packetStr.indexOf("[hex]") >= 0, "Should show [hex] for malformed option");
+
+		// Malformed option should show hex bytes
+		assert(packetStr.indexOf("FF FF FF 00 01") >= 0, "Should show hex bytes for malformed option");
+
+		// Valid option should display correctly
+		assert(packetStr.indexOf("192.168.1.1") >= 0, "Valid option should display correctly");
+	}
+}

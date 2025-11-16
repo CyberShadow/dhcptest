@@ -379,7 +379,7 @@ string formatPacket(
 		{
 			if (option.type == opt)
 			{
-				return formatRawOption(option.data, fmt);
+				return formatRawOption(option.data, fmt, onWarning);
 			}
 		}
 
@@ -411,9 +411,35 @@ string formatPacket(
 	foreach (option; packet.options)
 	{
 		auto type = cast(DHCPOptionType)option.type;
-		output.formattedWrite!"    %s: "(formatDHCPOptionType(type));
 		auto fmt = dhcpOptions.get(type, DHCPOptionSpec.init).format;
-		output.put(formatOption(option.data, fmt, syntax));
+
+		// Try to format the option value
+		string formattedValue;
+		bool usedHexFallback = false;
+
+		try
+		{
+			formattedValue = formatOption(option.data, fmt, syntax, onWarning);
+		}
+		catch (Exception e)
+		{
+			// Emit warning if callback is set
+			if (onWarning)
+				onWarning(format("Error formatting option %s as %s: %s (displaying as hex)",
+					formatDHCPOptionType(type), fmt, e.msg));
+
+			// Fall back to hex format
+			formattedValue = formatOption(option.data, OptionFormat.hex, syntax, onWarning);
+			usedHexFallback = true;
+		}
+
+		// Output the option with appropriate annotation
+		if (usedHexFallback)
+			output.formattedWrite!"    %s[hex]: "(formatDHCPOptionType(type));
+		else
+			output.formattedWrite!"    %s: "(formatDHCPOptionType(type));
+
+		output.put(formattedValue);
 		output.put("\n");
 	}
 
