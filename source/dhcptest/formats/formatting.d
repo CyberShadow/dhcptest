@@ -321,24 +321,47 @@ struct OptionFormatter(Out)
 		}
 	}
 
-	/// Format an array
-	private void formatArray(const ubyte[] bytes, OptionFormat elementType, size_t elementSize)
+	/// Format an array using callback-based approach (similar to formatStruct)
+	/// extractItems: returns all items as ubyte[][]
+	/// getItemFormat: returns format for item at given index
+	private void formatArray(
+		scope ubyte[][] delegate() extractItems,
+		scope OptionFormat delegate(size_t index) getItemFormat)
 	{
-		enforce(bytes.length % elementSize == 0, "Array bytes length not multiple of element size");
+		auto items = extractItems();
 
 		output.put('[');
 
 		bool first = true;
-		for (size_t i = 0; i < bytes.length; i += elementSize)
+		foreach (i, itemBytes; items)
 		{
 			if (!first)
 				output.put(", ");
 			first = false;
 
-			formatValue(bytes[i .. i + elementSize], elementType);
+			auto itemFormat = getItemFormat(i);
+			formatValue(itemBytes, itemFormat);
 		}
 
 		output.put(']');
+	}
+
+	/// Convenience wrapper for fixed-size element arrays
+	private void formatArray(const ubyte[] bytes, OptionFormat elementType, size_t elementSize)
+	{
+		enforce(bytes.length % elementSize == 0, "Array bytes length not multiple of element size");
+
+		formatArray(
+			// extractItems: split bytes into fixed-size chunks
+			() {
+				ubyte[][] items;
+				for (size_t i = 0; i < bytes.length; i += elementSize)
+					items ~= bytes[i .. i + elementSize].dup;
+				return items;
+			},
+			// getItemFormat: all items have the same format
+			(size_t index) => elementType
+		);
 	}
 
 	/// Format a comment: (text)
