@@ -131,15 +131,15 @@ static this()
 		  0 : DHCPOptionSpec("Pad Option", OptionFormat.special),
 		  1 : DHCPOptionSpec("Subnet Mask", OptionFormat.ip),
 		  2 : DHCPOptionSpec("Time Offset", OptionFormat.duration),
-		  3 : DHCPOptionSpec("Router Option", OptionFormat.ip),
-		  4 : DHCPOptionSpec("Time Server Option", OptionFormat.ip),
-		  5 : DHCPOptionSpec("Name Server Option", OptionFormat.ip),
-		  6 : DHCPOptionSpec("Domain Name Server Option", OptionFormat.ip),
-		  7 : DHCPOptionSpec("Log Server Option", OptionFormat.ip),
-		  8 : DHCPOptionSpec("Cookie Server Option", OptionFormat.ip),
-		  9 : DHCPOptionSpec("LPR Server Option", OptionFormat.ip),
-		 10 : DHCPOptionSpec("Impress Server Option", OptionFormat.ip),
-		 11 : DHCPOptionSpec("Resource Location Server Option", OptionFormat.ip),
+		  3 : DHCPOptionSpec("Router Option", OptionFormat.ips),
+		  4 : DHCPOptionSpec("Time Server Option", OptionFormat.ips),
+		  5 : DHCPOptionSpec("Name Server Option", OptionFormat.ips),
+		  6 : DHCPOptionSpec("Domain Name Server Option", OptionFormat.ips),
+		  7 : DHCPOptionSpec("Log Server Option", OptionFormat.ips),
+		  8 : DHCPOptionSpec("Cookie Server Option", OptionFormat.ips),
+		  9 : DHCPOptionSpec("LPR Server Option", OptionFormat.ips),
+		 10 : DHCPOptionSpec("Impress Server Option", OptionFormat.ips),
+		 11 : DHCPOptionSpec("Resource Location Server Option", OptionFormat.ips),
 		 12 : DHCPOptionSpec("Host Name Option", OptionFormat.str),
 		 13 : DHCPOptionSpec("Boot File Size Option", OptionFormat.u16),
 		 14 : DHCPOptionSpec("Merit Dump File", OptionFormat.str),
@@ -169,15 +169,15 @@ static this()
 		 38 : DHCPOptionSpec("TCP Keepalive Interval Option", OptionFormat.u32),
 		 39 : DHCPOptionSpec("TCP Keepalive Garbage Option", OptionFormat.boolean),
 		 40 : DHCPOptionSpec("Network Information Service Domain Option", OptionFormat.str),
-		 41 : DHCPOptionSpec("Network Information Servers Option", OptionFormat.ip),
-		 42 : DHCPOptionSpec("Network Time Protocol Servers Option", OptionFormat.ip),
+		 41 : DHCPOptionSpec("Network Information Servers Option", OptionFormat.ips),
+		 42 : DHCPOptionSpec("Network Time Protocol Servers Option", OptionFormat.ips),
 		 43 : DHCPOptionSpec("Vendor Specific Information", OptionFormat.vendorSpecificInformation),
-		 44 : DHCPOptionSpec("NetBIOS over TCP/IP Name Server Option", OptionFormat.ip),
-		 45 : DHCPOptionSpec("NetBIOS over TCP/IP Datagram Distribution Server Option", OptionFormat.ip),
+		 44 : DHCPOptionSpec("NetBIOS over TCP/IP Name Server Option", OptionFormat.ips),
+		 45 : DHCPOptionSpec("NetBIOS over TCP/IP Datagram Distribution Server Option", OptionFormat.ips),
 		 46 : DHCPOptionSpec("NetBIOS over TCP/IP Node Type Option", OptionFormat.netbiosNodeType),
 		 47 : DHCPOptionSpec("NetBIOS over TCP/IP Scope Option", OptionFormat.str),
-		 48 : DHCPOptionSpec("X Window System Font Server Option", OptionFormat.ip),
-		 49 : DHCPOptionSpec("X Window System Display Manager Option", OptionFormat.ip),
+		 48 : DHCPOptionSpec("X Window System Font Server Option", OptionFormat.ips),
+		 49 : DHCPOptionSpec("X Window System Display Manager Option", OptionFormat.ips),
 		 50 : DHCPOptionSpec("Requested IP Address", OptionFormat.ip),
 		 51 : DHCPOptionSpec("IP Address Lease Time", OptionFormat.duration),
 		 52 : DHCPOptionSpec("Option Overload", OptionFormat.clientIdentifier),
@@ -191,18 +191,18 @@ static this()
 		 60 : DHCPOptionSpec("Vendor class identifier", OptionFormat.str),
 		 61 : DHCPOptionSpec("Client-identifier", OptionFormat.u8),
 		 64 : DHCPOptionSpec("Network Information Service+ Domain Option", OptionFormat.str),
-		 65 : DHCPOptionSpec("Network Information Service+ Servers Option", OptionFormat.ip),
+		 65 : DHCPOptionSpec("Network Information Service+ Servers Option", OptionFormat.ips),
 		 66 : DHCPOptionSpec("TFTP server name", OptionFormat.str),
 		 67 : DHCPOptionSpec("Bootfile name", OptionFormat.str),
-		 68 : DHCPOptionSpec("Mobile IP Home Agent option", OptionFormat.ip),
-		 69 : DHCPOptionSpec("Simple Mail Transport Protocol (SMTP) Server Option", OptionFormat.ip),
-		 70 : DHCPOptionSpec("Post Office Protocol (POP3) Server Option", OptionFormat.ip),
-		 71 : DHCPOptionSpec("Network News Transport Protocol (NNTP) Server Option", OptionFormat.ip),
-		 72 : DHCPOptionSpec("Default World Wide Web (WWW) Server Option", OptionFormat.ip),
-		 73 : DHCPOptionSpec("Default Finger Server Option", OptionFormat.ip),
-		 74 : DHCPOptionSpec("Default Internet Relay Chat (IRC) Server Option", OptionFormat.ip),
-		 75 : DHCPOptionSpec("StreetTalk Server Option", OptionFormat.ip),
-		 76 : DHCPOptionSpec("StreetTalk Directory Assistance (STDA) Server Option", OptionFormat.ip),
+		 68 : DHCPOptionSpec("Mobile IP Home Agent option", OptionFormat.ips),
+		 69 : DHCPOptionSpec("Simple Mail Transport Protocol (SMTP) Server Option", OptionFormat.ips),
+		 70 : DHCPOptionSpec("Post Office Protocol (POP3) Server Option", OptionFormat.ips),
+		 71 : DHCPOptionSpec("Network News Transport Protocol (NNTP) Server Option", OptionFormat.ips),
+		 72 : DHCPOptionSpec("Default World Wide Web (WWW) Server Option", OptionFormat.ips),
+		 73 : DHCPOptionSpec("Default Finger Server Option", OptionFormat.ips),
+		 74 : DHCPOptionSpec("Default Internet Relay Chat (IRC) Server Option", OptionFormat.ips),
+		 75 : DHCPOptionSpec("StreetTalk Server Option", OptionFormat.ips),
+		 76 : DHCPOptionSpec("StreetTalk Directory Assistance (STDA) Server Option", OptionFormat.ips),
 		 // RFC 3004 - The User Class Option for DHCP
 		 // Format: array of length-prefixed strings [len1][data1][len2][data2]...
 		 // Each user class is a separate opaque identifier configured by the administrator
@@ -324,6 +324,17 @@ unittest
 	auto formatted = formatValue(multi, OptionFormat.ips);
 	auto reparsed = parseOption(formatted, OptionFormat.ips);
 	assert(reparsed == multi);
+}
+
+unittest
+{
+	// Test Option 6 - Domain Name Server Option with multiple IPs
+	assert(dhcpOptions[6].name == "Domain Name Server Option");
+	assert(dhcpOptions[6].format == OptionFormat.ips);
+
+	// Two DNS servers: 192.168.50.1 and 9.9.9.9
+	ubyte[] data = [0xC0, 0xA8, 0x32, 0x01, 0x09, 0x09, 0x09, 0x09];
+	assert(formatValue(data, OptionFormat.ips) == "[192.168.50.1, 9.9.9.9]");
 }
 
 unittest
