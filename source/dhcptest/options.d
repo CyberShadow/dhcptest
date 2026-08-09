@@ -180,7 +180,8 @@ static this()
 		 49 : DHCPOptionSpec("X Window System Display Manager Option", OptionFormat.ips),
 		 50 : DHCPOptionSpec("Requested IP Address", OptionFormat.ip),
 		 51 : DHCPOptionSpec("IP Address Lease Time", OptionFormat.duration),
-		 52 : DHCPOptionSpec("Option Overload", OptionFormat.clientIdentifier),
+		 // RFC 2132 section 9.3 - length is exactly 1, legal values are 1, 2 and 3
+		 52 : DHCPOptionSpec("Option Overload", OptionFormat.u8),
 		 53 : DHCPOptionSpec("DHCP Message Type", OptionFormat.dhcpMessageType),
 		 54 : DHCPOptionSpec("Server Identifier", OptionFormat.ip),
 		 55 : DHCPOptionSpec("Parameter Request List", OptionFormat.dhcpOptionType),
@@ -189,7 +190,8 @@ static this()
 		 58 : DHCPOptionSpec("Renewal (T1) Time Value", OptionFormat.duration),
 		 59 : DHCPOptionSpec("Rebinding (T2) Time Value", OptionFormat.duration),
 		 60 : DHCPOptionSpec("Vendor class identifier", OptionFormat.str),
-		 61 : DHCPOptionSpec("Client-identifier", OptionFormat.u8),
+		 // RFC 2132 section 9.14 - minimum length 2: a type octet followed by the identifier
+		 61 : DHCPOptionSpec("Client-identifier", OptionFormat.clientIdentifier),
 		 64 : DHCPOptionSpec("Network Information Service+ Domain Option", OptionFormat.str),
 		 65 : DHCPOptionSpec("Network Information Service+ Servers Option", OptionFormat.ips),
 		 66 : DHCPOptionSpec("TFTP server name", OptionFormat.str),
@@ -299,6 +301,41 @@ unittest
 	auto unknown = parseOption("255", OptionFormat.processorArchitecture);
 	assert(unknown == [0x00, 0xFF]);
 	assert(formatValue(unknown, OptionFormat.processorArchitecture) == "255");
+}
+
+unittest
+{
+	// Test Option 52 - Option Overload (RFC 2132 section 9.3)
+	// "The code for this option is 52, and its length is 1.
+	//  Legal values for this option are: 1, 2, 3"
+
+	assert(dhcpOptions[52].name == "Option Overload");
+	assert(dhcpOptions[52].format == OptionFormat.u8);
+
+	// 3 = both the 'file' and 'sname' fields are used to hold options
+	auto overload = parseOption("3", OptionFormat.u8);
+	assert(overload == [0x03]);
+	assert(formatValue(overload, OptionFormat.u8) == "3");
+}
+
+unittest
+{
+	// Test Option 61 - Client-identifier (RFC 2132 section 9.14)
+	// "The code for this option is 61, and its minimum length is 2."
+	// Layout: Code | Len | Type | Client-Identifier
+
+	assert(dhcpOptions[61].name == "Client-identifier");
+	assert(dhcpOptions[61].format == OptionFormat.clientIdentifier);
+
+	// Hardware type 1 (Ethernet) followed by a MAC address
+	auto id = parseOption("type=1, clientIdentifier=AABBCCDDEEFF", OptionFormat.clientIdentifier);
+	assert(id == [0x01, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+	assert(formatValue(id, OptionFormat.clientIdentifier) == "type=1, clientIdentifier=AA BB CC DD EE FF");
+
+	// Test roundtrip
+	auto formatted = formatValue(id, OptionFormat.clientIdentifier);
+	auto reparsed = parseOption(formatted, OptionFormat.clientIdentifier);
+	assert(reparsed == id);
 }
 
 unittest
